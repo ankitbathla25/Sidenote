@@ -1,4 +1,4 @@
-import type { Message, AnthropicResponse, ApiConfig, ApiResult, Usage } from './types'
+import type { Message, AnthropicResponse, ApiConfig, ApiResult, Usage, ImageSource } from './types'
 
 const API_URL = 'https://api.anthropic.com/v1/messages'
 
@@ -76,13 +76,36 @@ const normalizeMessages = (messages: Message[]): Message[] => {
 // accepts either a plain string or an array of content blocks for `content`;
 // only blocks can hold a `cache_control` marker, so we promote just the one
 // message we want to cache up to.
+type ContentBlockParam =
+  | { type: 'text'; text: string; cache_control?: { type: 'ephemeral' } }
+  | { type: 'image'; source: ImageSource; cache_control?: { type: 'ephemeral' } }
+
 interface CacheableMessage {
   role: 'user' | 'assistant'
-  content: string | Array<{
-    type: 'text'
-    text: string
-    cache_control?: { type: 'ephemeral' }
-  }>
+  content: string | ContentBlockParam[]
+}
+
+// Prepends an image block to the first user turn so the request is multimodal.
+// The image lives at the front of the conversation (and thus inside the cached
+// prefix), so it's sent at full price once and re-read cheaply on follow-ups.
+const prependImage = (
+  messages: CacheableMessage[],
+  image: ImageSource
+): CacheableMessage[] => {
+  const idx = messages.findIndex((m) => m.role === 'user')
+  if (idx === -1) return messages
+
+  const target = messages[idx]
+  const existing: ContentBlockParam[] =
+    typeof target.content === 'string'
+      ? [{ type: 'text', text: target.content }]
+      : target.content
+
+  messages[idx] = {
+    role: target.role,
+    content: [{ type: 'image', source: image }, ...existing],
+  }
+  return messages
 }
 
 // Marks the last message with a prompt-caching breakpoint.
@@ -134,8 +157,12 @@ export const sendMessage = async (
   systemPrompt: string,
   messages: Message[],
   onText: (chunk: string) => void,
+  image?: ImageSource,
   maxTokens: number = 4096
 ): Promise<ApiResult> => {
+  let apiMessages = withConversationCache(normalizeMessages(messages))
+  if (image) apiMessages = prependImage(apiMessages, image)
+
   const response = await fetch(API_URL, {
     method: 'POST',
     headers: buildHeaders(config.apiKey),
@@ -143,7 +170,7 @@ export const sendMessage = async (
       model: config.model,
       max_tokens: maxTokens,
       system: systemPrompt,
-      messages: withConversationCache(normalizeMessages(messages)),
+      messages: apiMessages,
       stream: true,
     }),
   })

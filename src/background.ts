@@ -6,6 +6,7 @@
 // the current selection.
 
 const MENU_ID = 'cir-ask-selection'
+const IMAGE_MENU_ID = 'cir-ask-image'
 
 // Ask the content script in a tab to open a session from the current selection
 const triggerAsk = (tabId: number): void => {
@@ -14,18 +15,33 @@ const triggerAsk = (tabId: number): void => {
   })
 }
 
-// Create the context-menu item once, when the extension is installed/updated
+// Ask the content script to open a session about a right-clicked image
+const triggerAskImage = (tabId: number, srcUrl: string): void => {
+  chrome.tabs.sendMessage(tabId, { type: 'cir-ask-image', srcUrl }).catch(() => {
+    // No content script on this tab — ignore
+  })
+}
+
+// Create the context-menu items once, when the extension is installed/updated
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({
     id: MENU_ID,
     title: 'Ask Claude about “%s”',
     contexts: ['selection'],
   })
+  chrome.contextMenus.create({
+    id: IMAGE_MENU_ID,
+    title: 'Ask Claude about this image',
+    contexts: ['image'],
+  })
 })
 
 chrome.contextMenus.onClicked.addListener((info, tab) => {
-  if (info.menuItemId === MENU_ID && tab?.id != null) {
+  if (tab?.id == null) return
+  if (info.menuItemId === MENU_ID) {
     triggerAsk(tab.id)
+  } else if (info.menuItemId === IMAGE_MENU_ID && info.srcUrl) {
+    triggerAskImage(tab.id, info.srcUrl)
   }
 })
 

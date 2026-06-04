@@ -75,13 +75,23 @@ whole chat — not just the snippet.
 - On any **other** site, there's no conversation to read, so it gracefully falls
   back to using just the highlighted text.
 
-### 5. Three ways to trigger
-- **Floating toolbar** near the selection (Ask + quick-action chips).
-- **Right-click → "Ask Claude about '…'"** context-menu item.
+### 4a. Ask about images (vision)
+**Right-click any image → "Ask Claude about this image"** to open a panel with
+that picture attached and ask Claude's vision model about it — describe it, read
+text from it, explain a chart or diagram, and so on. The image is fetched and
+base64-encoded right in the page (so even private, logged-in-page images work);
+if it can't be read locally, the public URL is handed to the API to fetch
+server-side. A thumbnail of the image sits at the top of the panel.
+
+### 5. Several ways to trigger
+- **Floating toolbar** near a text selection (Ask + quick-action chips).
+- **Right-click → "Ask Claude about '…'"** on selected text, or **"Ask Claude
+  about this image"** on any image.
 - **Keyboard shortcut:** `⌘/Ctrl + Shift + L` (rebindable at
   `chrome://extensions/shortcuts`).
 
-All three open a session from whatever you currently have selected.
+They open a session from whatever you currently have selected (or the image you
+right-clicked).
 
 ### 6. Draggable & resizable panels
 - **Drag** a panel anywhere by grabbing its header.

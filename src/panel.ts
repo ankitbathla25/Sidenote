@@ -6,6 +6,7 @@ import type {
   PanelGeometry,
   SavedSession,
   Usage,
+  ImageSource,
 } from './types'
 
 // ─── DOM Builders ────────────────────────────────────────────────────────────
@@ -401,11 +402,19 @@ const createInitialState = (): PanelState => ({
   highlightMark: null,
 })
 
-// Builds the system prompt. The seed messages already give Claude the
-// conversation the user was reading; this points at the highlighted passage so
-// answers stay focused on it.
-const buildSystemPrompt = (selectedText: string): string =>
-  `
+// Builds the system prompt. For image sessions the picture is attached to the
+// first user turn, so the prompt just frames the task. For text sessions the
+// seed gives Claude the conversation and this points at the highlighted passage.
+const buildSystemPrompt = (selectedText: string, hasImage: boolean): string => {
+  if (hasImage) {
+    return `
+You are a helpful assistant. The user has shared an image (attached to their
+first message) and wants to ask about it. Answer based on what's in the image.
+Be concise. Use markdown formatting when it helps clarity.
+    `.trim()
+  }
+
+  return `
 You are a helpful assistant. The preceding messages are the conversation the
 user is currently reading. The user has highlighted a specific passage from it
 and wants to ask about that passage.
@@ -418,6 +427,7 @@ ${selectedText}
 Answer using the full conversation as context, but stay focused on the
 highlighted passage. Be concise. Use markdown formatting when it helps clarity.
   `.trim()
+}
 
 // ─── Send handler ─────────────────────────────────────────────────────────────
 
@@ -425,6 +435,7 @@ const handleSend = async (
   state: PanelState,
   config: ApiConfig,
   selectedText: string,
+  image: ImageSource | undefined,
   messagesEl: HTMLDivElement,
   textarea: HTMLTextAreaElement,
   sendBtn: HTMLButtonElement,
@@ -465,7 +476,7 @@ const handleSend = async (
     // onText fires for every streamed chunk so the answer appears live.
     const reply = await sendMessage(
       config,
-      buildSystemPrompt(selectedText),
+      buildSystemPrompt(selectedText, !!image),
       [...state.seed, ...state.messages],
       (chunk) => {
         if (!assistantEl) {
@@ -477,7 +488,8 @@ const handleSend = async (
         streamed += chunk
         el.innerHTML = renderMarkdown(streamed)
         scrollMessagesToBottom(messagesEl)
-      }
+      },
+      image
     )
 
     // Make sure a bubble exists (e.g. an empty reply produced no deltas), then
@@ -545,6 +557,10 @@ export interface CreatePanelOptions {
   // A prompt to auto-send as soon as the panel opens (from a quick-action chip
   // like "Explain"). Empty/undefined just opens the panel for a free-form ask.
   initialPrompt?: string
+  // For image sessions: the picture to send to the vision API, plus the original
+  // src to show as a thumbnail in the panel.
+  image?: ImageSource
+  imagePreviewUrl?: string
   // How many panels are already open — cascades a new one so they don't stack
   cascadeIndex?: number
   // Called whenever the session's persistable state changes (messages, move,
@@ -566,6 +582,8 @@ export const createPanel = (options: CreatePanelOptions): Panel => {
     geometry = null,
     startMinimized = false,
     initialPrompt = '',
+    image,
+    imagePreviewUrl,
     cascadeIndex = 0,
     onChange,
     onDestroy,
@@ -591,8 +609,27 @@ export const createPanel = (options: CreatePanelOptions): Panel => {
     panel.querySelectorAll('.cir-resize-handle')
   ) as HTMLElement[]
 
+  // Image sessions: swap the "Selected text" preview for a thumbnail and adapt
+  // the input placeholder. The original src renders fine in an <img> regardless
+  // of how the image is actually sent to the API (base64 or url).
+  if (image && imagePreviewUrl) {
+    const label = panel.querySelector('.cir-context-label') as HTMLElement
+    const previewBox = panel.querySelector('.cir-context-text') as HTMLElement
+    label.textContent = 'Image'
+    previewBox.innerHTML = ''
+    previewBox.classList.add('cir-context-has-image') // drop the 3-line text clamp
+    const img = document.createElement('img')
+    img.className = 'cir-context-img'
+    img.src = imagePreviewUrl
+    img.alt = 'Selected image'
+    previewBox.appendChild(img)
+    textarea.placeholder = 'Ask about this image…'
+  }
+
   // The labelled pill the panel collapses into when minimized
-  const description = text.replace(/\s+/g, ' ').trim().slice(0, 160)
+  const description = image
+    ? 'Image'
+    : text.replace(/\s+/g, ' ').trim().slice(0, 160)
   const minimizedIcon = createMinimizedIcon(description)
 
   // Position: use saved geometry if restoring, else sit beside the selection
@@ -686,7 +723,7 @@ export const createPanel = (options: CreatePanelOptions): Panel => {
   closeBtn.addEventListener('click', destroy)
 
   const send = (): Promise<void> =>
-    handleSend(state, config, text, messagesEl, textarea, sendBtn, notifyChange)
+    handleSend(state, config, text, image, messagesEl, textarea, sendBtn, notifyChange)
 
   sendBtn.addEventListener('click', send)
 
@@ -739,6 +776,7 @@ export const createPanel = (options: CreatePanelOptions): Panel => {
       messages: state.messages,
       geometry: lastGeometry,
       minimized: isMinimized,
+      ...(image ? { image, imagePreviewUrl } : {}),
     }
   }
 

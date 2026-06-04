@@ -15,6 +15,13 @@ export interface StorageData {
   includePageContext?: boolean
 }
 
+// An image to send to Claude's vision API. Either inline base64 (we fetched and
+// encoded it ourselves) or a URL for Anthropic to fetch server-side (the CORS
+// fallback for cross-origin images we couldn't read from the page).
+export type ImageSource =
+  | { type: 'base64'; media_type: string; data: string }
+  | { type: 'url'; url: string }
+
 // The text the user selected + the DOM range it came from.
 // range is null for sessions restored after a page reload (the original
 // selection no longer exists, so there's nothing to highlight or anchor to).
@@ -39,6 +46,8 @@ export interface SavedSession {
   messages: Message[]     // the panel's own Q&A (rendered on restore)
   geometry: PanelGeometry | null
   minimized: boolean
+  image?: ImageSource     // for image sessions: what's sent to the vision API
+  imagePreviewUrl?: string // the original src, shown as a thumbnail in the panel
 }
 
 // Token accounting Anthropic returns with every response. The two cache fields

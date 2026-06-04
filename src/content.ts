@@ -2,7 +2,7 @@ import './content.css'
 import { createFloatingButton, calculateButtonPosition } from './floatingButton'
 import { promptForAction } from './actions'
 import { createPanel, type Panel } from './panel'
-import type { SelectionContext, StorageData, ApiConfig, Message, SavedSession } from './types'
+import type { SelectionContext, StorageData, ApiConfig, Message, SavedSession, ImageSource } from './types'
 import { DEFAULT_MODEL } from './api'
 import { loadSessions, saveSessions } from './storage'
 
@@ -302,6 +302,65 @@ const openPanelFromContext = (
   schedulePersist()
 }
 
+// ─── Image sessions ─────────────────────────────────────────────────────────────
+// Fetches an image and encodes it as base64 in the page context. Works for
+// same-origin/private images and data:/blob: URLs; throws for cross-origin
+// images the page can't read (CORS), which the caller handles with a URL fallback.
+const fetchImageAsBase64 = async (
+  url: string
+): Promise<{ media_type: string; data: string }> => {
+  const blob = await (await fetch(url)).blob()
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as string)
+    reader.onerror = () => reject(reader.error)
+    reader.readAsDataURL(blob)
+  })
+  // dataUrl looks like "data:image/png;base64,iVBORw0K…"
+  const comma = dataUrl.indexOf(',')
+  const media_type = dataUrl.slice(5, dataUrl.indexOf(';'))
+  return { media_type, data: dataUrl.slice(comma + 1) }
+}
+
+// Turns a right-clicked image's src into something the vision API accepts.
+const acquireImage = async (srcUrl: string): Promise<ImageSource> => {
+  try {
+    return { type: 'base64', ...(await fetchImageAsBase64(srcUrl)) }
+  } catch {
+    // Couldn't read it from the page — if it's a normal web URL, let Anthropic
+    // fetch it server-side. (data:/blob: can't be fetched remotely, so re-throw.)
+    if (/^https?:/i.test(srcUrl)) return { type: 'url', url: srcUrl }
+    throw new Error('Could not load this image')
+  }
+}
+
+// Opens a brand-new session about a right-clicked image
+const openImagePanel = async (srcUrl: string): Promise<void> => {
+  let image: ImageSource
+  try {
+    image = await acquireImage(srcUrl)
+  } catch {
+    showToast('Could not load that image.')
+    return
+  }
+
+  const panel = createPanel({
+    id: newId(),
+    text: '', // image sessions aren't about selected text
+    config: apiConfig(),
+    seed: [],
+    range: null,
+    image,
+    imagePreviewUrl: srcUrl,
+    cascadeIndex: state.panels.length,
+    onChange: schedulePersist,
+    onDestroy: removePanel,
+  })
+
+  state.panels.push(panel)
+  schedulePersist()
+}
+
 // Re-creates a session saved before a page reload
 const restoreSession = (saved: SavedSession): void => {
   const panel = createPanel({
@@ -313,6 +372,8 @@ const restoreSession = (saved: SavedSession): void => {
     messages: saved.messages,
     geometry: saved.geometry,
     startMinimized: saved.minimized,
+    image: saved.image,
+    imagePreviewUrl: saved.imagePreviewUrl,
     onChange: schedulePersist,
     onDestroy: removePanel,
   })
@@ -346,31 +407,38 @@ function onActionClick(actionId: string): void {
 // The context-menu item and keyboard shortcut both ask the background worker to
 // send us this message; we open a session from whatever the user has selected.
 
-chrome.runtime.onMessage.addListener((message: { type?: string }) => {
-  if (message?.type !== 'cir-ask-selection') return
+chrome.runtime.onMessage.addListener(
+  (message: { type?: string; srcUrl?: string }) => {
+    if (message?.type !== 'cir-ask-selection' && message?.type !== 'cir-ask-image') {
+      return
+    }
 
-  if (!config.apiKey) {
-    showNoApiKeyMessage()
-    return
+    if (!config.apiKey) {
+      showNoApiKeyMessage()
+      return
+    }
+
+    if (message.type === 'cir-ask-image' && message.srcUrl) {
+      void openImagePanel(message.srcUrl)
+      return
+    }
+
+    const context = getSelectionContext()
+    if (context) openPanelFromContext(context)
   }
+)
 
-  const context = getSelectionContext()
-  if (context) openPanelFromContext(context)
-})
+// ─── Toasts ─────────────────────────────────────────────────────────────────────
+// Small inline notices instead of an alert() — much less jarring
 
-// ─── No API key message ───────────────────────────────────────────────────────
-// Shown inline instead of an alert() — much less jarring
-
-const showNoApiKeyMessage = (): void => {
+// `body` is trusted HTML built by us (never user/page content)
+const showToast = (body: string): void => {
   // Don't show multiple toasts at once
   if (document.querySelector('.cir-toast')) return
 
   const toast = document.createElement('div')
   toast.className = 'cir-toast'
-  toast.innerHTML = `
-    <span>No API key set.</span>
-    <strong>Click the extension icon to add one.</strong>
-  `
+  toast.innerHTML = body
   document.body.appendChild(toast)
 
   // Animate in
@@ -382,3 +450,6 @@ const showNoApiKeyMessage = (): void => {
     setTimeout(() => toast.remove(), 300)
   }, 4000)
 }
+
+const showNoApiKeyMessage = (): void =>
+  showToast('<span>No API key set.</span><strong>Click the extension icon to add one.</strong>')

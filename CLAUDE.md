@@ -13,6 +13,10 @@ on-screen conversation in as context.
   quick-action chips appears. Click **Ask** for a free-form question, or a preset
   (**Explain / Summarize / Simplify**) to fire it instantly. A small chat panel
   opens next to the selection and the answer **streams in live**, Markdown-rendered.
+- **Ask about images (vision).** Right-click any image → *"Ask Claude about this
+  image"* opens a panel with the picture attached and asks Claude's vision model
+  about it. Images are fetched + base64-encoded in the page (covers private/
+  same-origin images), falling back to a URL the API fetches server-side.
 - **Follow-up conversations.** Each panel is a real conversation — keep asking
   follow-ups and the panel remembers the thread.
 - **Multiple sessions at once.** Every selection opens its own independent
@@ -25,8 +29,8 @@ on-screen conversation in as context.
   dock. Hover the pill to see what the session was about; click to reopen.
 - **Survives reloads.** Open sessions (position, size, conversation, minimized
   state) are saved per-page and restored when you reload.
-- **Three ways to trigger:** the floating toolbar, a right-click menu item, or a
-  keyboard shortcut (`⌘/Ctrl + Shift + L`).
+- **Several ways to trigger:** the floating toolbar, a right-click menu item
+  (text *or* image), or a keyboard shortcut (`⌘/Ctrl + Shift + L`).
 - **Looks like claude.ai.** Uses Anthropic's ivory + coral palette, inherits
   the page's fonts on-site, and follows light/dark mode automatically.
 
@@ -152,7 +156,7 @@ updates afterward:
 | `src/api.ts` | Anthropic API client. Streaming `sendMessage()` (SSE → `onText` chunks + usage), model list, `normalizeMessages()`, `withConversationCache()`. |
 | `src/markdown.ts` | Minimal Markdown→HTML renderer (with HTML escaping). |
 | `src/storage.ts` | Load/save sessions in `chrome.storage.local`, keyed by `origin + pathname`. |
-| `src/background.ts` | Service worker: context-menu item and keyboard command → message the active tab. |
+| `src/background.ts` | Service worker: context-menu items (selection → `cir-ask-selection`, image → `cir-ask-image` with the `srcUrl`) and keyboard command → message the active tab. |
 | `src/popup.html` / `src/popup.ts` | Toolbar popup: enter API key, choose model. Writes to `chrome.storage.sync`. |
 | `src/types.ts` | Shared types: `Message`, `SelectionContext`, `ApiConfig`, `PanelGeometry`, `SavedSession`, etc. |
 | `src/content.css` | All injected UI styles. Theme tokens (`--cir-*`) with a `prefers-color-scheme: dark` block. |
