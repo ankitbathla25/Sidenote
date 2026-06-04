@@ -131,17 +131,27 @@ const isInsideOwnUI = (node: Node): boolean => {
 // Reads the full conversation currently rendered on the claude.ai page so the
 // panel's Claude shares the same context — not just the highlighted snippet.
 //
-// This is inherently coupled to claude.ai's DOM: messages are marked with a
-// data-message-author-role attribute ("user" | "assistant"). If that markup
-// ever changes we simply return [] and the panel falls back to selection-only
+// This is inherently coupled to claude.ai's DOM. Their current markup tags user
+// turns with [data-testid="user-message"] and assistant turns with the
+// .font-claude-response class. We query both together so querySelectorAll
+// returns them in conversation (document) order, then fall back to the legacy
+// [data-message-author-role] attribute for other/older layouts. If nothing
+// matches we return [] (and warn) so the panel degrades to selection-only
 // context — it never throws.
 
-const scrapeConversation = (): Message[] => {
-  const nodes = document.querySelectorAll('[data-message-author-role]')
+// claude.ai (current)
+const USER_SELECTOR = '[data-testid="user-message"]'
+const ASSISTANT_SELECTOR = '.font-claude-response'
 
+// Pulls role-tagged text out of a node list, keeping document order and
+// dropping anything that isn't a clean user/assistant turn.
+const collectMessages = (
+  nodes: NodeListOf<Element>,
+  roleOf: (el: Element) => string | null
+): Message[] => {
   const messages: Message[] = []
   nodes.forEach((node) => {
-    const role = node.getAttribute('data-message-author-role')
+    const role = roleOf(node)
     // Only the two roles the Anthropic API accepts
     if (role !== 'user' && role !== 'assistant') return
 
@@ -152,6 +162,32 @@ const scrapeConversation = (): Message[] => {
 
     messages.push({ role, content: text })
   })
+  return messages
+}
+
+const scrapeConversation = (): Message[] => {
+  // Primary: claude.ai's current per-turn selectors, queried together so the
+  // user/assistant turns come back interleaved in the right order.
+  let messages = collectMessages(
+    document.querySelectorAll(`${USER_SELECTOR}, ${ASSISTANT_SELECTOR}`),
+    (el) => (el.matches(USER_SELECTOR) ? 'user' : 'assistant')
+  )
+
+  // Fallback: older markup (and ChatGPT-style pages) carries the role on a
+  // data attribute. Only consulted if the primary selectors matched nothing.
+  if (messages.length === 0) {
+    messages = collectMessages(
+      document.querySelectorAll('[data-message-author-role]'),
+      (el) => el.getAttribute('data-message-author-role')
+    )
+  }
+
+  // Make the failure visible instead of silently sending selection-only context
+  if (messages.length === 0 && /(^|\.)claude\.ai$/.test(location.hostname)) {
+    console.warn(
+      '[Sidenote] Captured 0 conversation messages on claude.ai — the page markup may have changed. Sending the selected text only.'
+    )
+  }
 
   return messages
 }

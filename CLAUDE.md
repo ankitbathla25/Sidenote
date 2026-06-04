@@ -65,9 +65,11 @@ The extension has three runtime contexts, plus shared modules:
    `floatingButton.ts`.
 2. **Trigger** — clicking the button (or the right-click menu / shortcut routed
    through `background.ts`) calls `openPanelFromContext()`.
-3. **Context capture** — `scrapeConversation()` reads every
-   `[data-message-author-role]` element on the page (claude.ai's message
-   markup) to build the conversation as context. Off claude.ai this is empty.
+3. **Context capture** — `scrapeConversation()` reads claude.ai's message
+   elements (`[data-testid="user-message"]` for user turns,
+   `.font-claude-response` for assistant turns, with a legacy
+   `[data-message-author-role]` fallback) to build the conversation as context.
+   Off claude.ai this is empty.
 4. **Panel** — `createPanel()` (in `panel.ts`) mounts the chat panel, seeded
    with that conversation and the selected text.
 5. **Ask** — on send, `panel.ts` calls `sendMessage()` in `api.ts`, which POSTs
@@ -238,9 +240,10 @@ no connection to your claude.ai account.
 - **claude.ai SPA navigation:** session restore runs once when the content
   script loads. Switching chats in-app (no full reload) changes the page key, so
   sessions won't auto-reopen until an actual reload.
-- **DOM coupling:** conversation scraping depends on claude.ai's
-  `data-message-author-role` markup; if that changes, context falls back to the
-  selection only.
+- **DOM coupling:** conversation scraping depends on claude.ai's per-turn
+  markup (`[data-testid="user-message"]` / `.font-claude-response`); if that
+  changes, context falls back to the selection only and a warning is logged to
+  the page console.
 - **Cross-origin API calls:** the request now fires from arbitrary sites; strict
   page CSPs could block it on some pages.
 - **Cost:** on long claude.ai threads the whole conversation is sent each call.
