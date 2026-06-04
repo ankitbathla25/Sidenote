@@ -275,6 +275,12 @@ const openPanelFromContext = (context: SelectionContext): void => {
   // user has turned page context off, send only the selection to save tokens.
   const seed = config.includePageContext ? scrapeConversation() : []
 
+  // Visible at session-open time so context capture isn't a black box: tells you
+  // whether page context is enabled and how many conversation turns were grabbed.
+  console.debug(
+    `[Sidenote] opening session — page context ${config.includePageContext ? 'ON' : 'OFF'}, ${seed.length} context message(s) captured`
+  )
+
   const panel = createPanel({
     id: newId(),
     text: context.text,
