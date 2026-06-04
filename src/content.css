@@ -1,0 +1,714 @@
+/* ─── Theme tokens ──────────────────────────────────────────────────────────────
+   Anthropic / claude.ai brand palette. Declared on each of our root elements so
+   the variables are available without leaking onto claude.ai's own :root.
+   Light values match claude.ai's default ivory theme; the dark-mode block below
+   matches claude.ai's warm dark theme, so the panel follows the page.           */
+
+.cir-float-btn,
+.cir-panel,
+.cir-toast,
+.cir-minimized {
+  --cir-bg: #faf9f5;          /* ivory page background            */
+  --cir-surface: #ffffff;     /* input / raised surfaces          */
+  --cir-card: #f0eee6;        /* user bubble, context box         */
+  --cir-border: #e8e6dc;      /* hairline borders                 */
+  --cir-text: #141413;        /* primary text                     */
+  --cir-text-muted: #73726b;  /* secondary text                   */
+  --cir-faint: #b0aea5;       /* labels, placeholders             */
+  --cir-accent: #d97757;      /* Claude coral — primary accent     */
+  --cir-accent-hover: #c25f3f;
+  --cir-accent-soft: rgba(217, 119, 87, 0.12);
+  --cir-accent-border: rgba(217, 119, 87, 0.28);
+  --cir-shadow: rgba(20, 20, 19, 0.16);
+  --cir-error: #b91c1c;
+  --cir-error-soft: rgba(185, 28, 28, 0.08);
+  --cir-error-border: rgba(185, 28, 28, 0.22);
+  --cir-code-bg: rgba(20, 20, 19, 0.06);
+}
+
+@media (prefers-color-scheme: dark) {
+  .cir-float-btn,
+  .cir-panel,
+  .cir-toast,
+  .cir-minimized {
+    --cir-bg: #262624;        /* claude.ai warm dark background    */
+    --cir-surface: #30302e;
+    --cir-card: #1f1e1d;
+    --cir-border: #3e3d3a;
+    --cir-text: #f5f4ee;
+    --cir-text-muted: #c2c0b6;
+    --cir-faint: #8a887f;
+    --cir-accent: #d97757;
+    --cir-accent-hover: #e08a6e;
+    --cir-accent-soft: rgba(217, 119, 87, 0.16);
+    --cir-accent-border: rgba(217, 119, 87, 0.35);
+    --cir-shadow: rgba(0, 0, 0, 0.5);
+    --cir-error: #fca5a5;
+    --cir-error-soft: rgba(239, 68, 68, 0.12);
+    --cir-error-border: rgba(239, 68, 68, 0.25);
+    --cir-code-bg: rgba(255, 255, 255, 0.08);
+  }
+}
+
+/* ─── Reset ───────────────────────────────────────────────────────────────────
+   claude.ai has its own global styles. We scope everything under our own class
+   names and reset the basics. font: inherit makes our text render in claude.ai's
+   own loaded typeface, so the panel matches the page exactly.                   */
+
+.cir-float-btn,
+.cir-float-btn *,
+.cir-panel,
+.cir-panel *,
+.cir-toast,
+.cir-toast *,
+.cir-minimized,
+.cir-minimized * {
+  box-sizing: border-box;
+  font-family: inherit;
+  line-height: normal;
+  margin: 0;
+  padding: 0;
+}
+
+/* ─── Floating Button ─────────────────────────────────────────────────────────  */
+
+.cir-float-btn {
+  position: absolute;
+  z-index: 2147483640;
+
+  /* Hidden by default — shown by adding the --visible modifier class */
+  display: none;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+
+  background: var(--cir-accent);
+  color: #ffffff;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+
+  box-shadow:
+    0 4px 16px var(--cir-shadow),
+    0 0 0 1px rgba(0, 0, 0, 0.04);
+
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.12s ease,
+    background 0.12s ease;
+}
+
+/* Adding this class makes the button appear */
+.cir-float-btn--visible {
+  display: flex;
+  animation: cir-pop 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.cir-float-btn:hover {
+  background: var(--cir-accent-hover);
+  transform: translateY(-1px);
+  box-shadow:
+    0 6px 22px var(--cir-shadow),
+    0 0 0 1px rgba(0, 0, 0, 0.06);
+}
+
+@keyframes cir-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.82) translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* ─── Minimized dock ──────────────────────────────────────────────────────────
+   A fixed bottom-right stack holding one pill per minimized session.
+   Clicking outside collapses panels into pills here; clicking a pill expands it */
+
+.cir-dock {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 2147483641;
+
+  display: flex;
+  flex-direction: column; /* newest pill sits at the bottom, nearest the corner */
+  align-items: flex-end;
+  gap: 8px;
+
+  pointer-events: none; /* let clicks fall through the empty parts of the dock */
+}
+
+.cir-minimized {
+  position: relative; /* anchors the hover tooltip */
+  pointer-events: auto;
+
+  display: none; /* shown by adding the --visible modifier class */
+  align-items: center;
+  gap: 7px;
+  max-width: 230px;
+  padding: 8px 14px 8px 12px;
+
+  background: var(--cir-accent);
+  color: #ffffff;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  user-select: none;
+
+  box-shadow:
+    0 4px 16px var(--cir-shadow),
+    0 0 0 1px rgba(0, 0, 0, 0.04);
+
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.12s ease,
+    background 0.12s ease;
+}
+
+.cir-minimized--visible {
+  display: flex;
+  animation: cir-pop 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.cir-minimized:hover {
+  background: var(--cir-accent-hover);
+  transform: translateY(-1px);
+  box-shadow:
+    0 6px 22px var(--cir-shadow),
+    0 0 0 1px rgba(0, 0, 0, 0.06);
+}
+
+.cir-minimized svg {
+  flex-shrink: 0;
+}
+
+/* The short snippet shown on the pill — clipped with an ellipsis */
+.cir-minimized-label {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The fuller description revealed above the pill on hover */
+.cir-minimized-tip {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+
+  width: max-content;
+  max-width: 300px;
+
+  padding: 8px 11px;
+  background: var(--cir-surface);
+  color: var(--cir-text);
+  border: 1px solid var(--cir-border);
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+  white-space: normal;
+
+  box-shadow: 0 8px 24px var(--cir-shadow);
+
+  opacity: 0;
+  transform: translateY(4px);
+  pointer-events: none;
+  transition: opacity 0.14s ease, transform 0.14s ease;
+}
+
+.cir-minimized:hover .cir-minimized-tip {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ─── Highlight ───────────────────────────────────────────────────────────────
+   Applied to the <mark> element that wraps the user's selected text           */
+
+mark.cir-highlight {
+  background: var(--cir-accent-soft);
+  border-radius: 3px;
+  padding: 1px 2px;
+  color: inherit;
+  border-bottom: 2px solid var(--cir-accent);
+}
+
+/* ─── Panel ───────────────────────────────────────────────────────────────────  */
+
+.cir-panel {
+  position: absolute;
+  z-index: 2147483639;
+  right: 16px;
+  width: 340px;
+  max-height: 520px;
+
+  background: var(--cir-bg);
+  color: var(--cir-text);
+  border: 1px solid var(--cir-border);
+  border-radius: 16px;
+
+  box-shadow:
+    0 24px 60px var(--cir-shadow),
+    0 2px 8px rgba(0, 0, 0, 0.04);
+
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+
+  animation: cir-panel-in 0.22s cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+
+/* Added by destroy() just before removing the panel from the DOM */
+.cir-panel-exit {
+  animation: cir-panel-out 0.18s ease forwards !important;
+}
+
+@keyframes cir-panel-in {
+  from {
+    opacity: 0;
+    transform: translateX(18px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes cir-panel-out {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(18px);
+  }
+}
+
+/* ─── Panel Header ────────────────────────────────────────────────────────────  */
+
+.cir-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 13px 15px 11px;
+  border-bottom: 1px solid var(--cir-border);
+  flex-shrink: 0;
+
+  /* Drag handle — the user can grab the header to move the panel */
+  cursor: grab;
+  user-select: none;
+}
+
+/* While actively dragging: grabbing cursor and disable the open animation
+   so the panel tracks the pointer crisply */
+.cir-panel-dragging {
+  animation: none !important;
+  cursor: grabbing;
+}
+
+.cir-panel-dragging .cir-panel-header {
+  cursor: grabbing;
+}
+
+/* ─── Resize handles ──────────────────────────────────────────────────────────
+   One grab zone in each corner. The bottom-right one shows a visible grip; the
+   others are invisible but switch the cursor on hover.                         */
+
+.cir-resize-handle {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  z-index: 4; /* above the header so top corners stay grabbable */
+}
+
+.cir-resize-nw { top: 0;    left: 0;  cursor: nwse-resize; }
+.cir-resize-ne { top: 0;    right: 0; cursor: nesw-resize; }
+.cir-resize-sw { bottom: 0; left: 0;  cursor: nesw-resize; }
+.cir-resize-se { bottom: 0; right: 0; cursor: nwse-resize; }
+
+/* Visible grip lines only on the bottom-right corner as the obvious affordance */
+.cir-resize-se {
+  background-image: linear-gradient(
+    135deg,
+    transparent 0 44%,
+    var(--cir-faint) 44% 52%,
+    transparent 52% 66%,
+    var(--cir-faint) 66% 74%,
+    transparent 74%
+  );
+  opacity: 0.55;
+  transition: opacity 0.12s;
+}
+
+.cir-resize-se:hover {
+  opacity: 1;
+}
+
+/* While resizing: kill the open animation so the panel tracks the pointer */
+.cir-panel-resizing {
+  animation: none !important;
+}
+
+.cir-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--cir-accent);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.cir-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.cir-close-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px;
+  background: transparent;
+  border: none;
+  border-radius: 7px;
+  color: var(--cir-faint);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.cir-close-btn:hover {
+  background: var(--cir-card);
+  color: var(--cir-text);
+}
+
+/* ─── Context Preview ─────────────────────────────────────────────────────────
+   The box at the top that shows the text the user selected                    */
+
+.cir-context-preview {
+  margin: 11px 12px 0;
+  padding: 9px 11px;
+  background: var(--cir-card);
+  border: 1px solid var(--cir-border);
+  border-left: 3px solid var(--cir-accent);
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.cir-context-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--cir-accent);
+  margin-bottom: 5px;
+}
+
+.cir-context-text {
+  font-size: 12px;
+  color: var(--cir-text-muted);
+  line-height: 1.55;
+  max-height: 60px;
+  overflow: hidden;
+
+  /* Clamp to 3 lines with an ellipsis */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+
+/* ─── Messages ────────────────────────────────────────────────────────────────  */
+
+.cir-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 48px;
+  scroll-behavior: smooth;
+}
+
+/* Thin scrollbar so it doesn't fight with claude.ai's own scrollbars */
+.cir-messages::-webkit-scrollbar {
+  width: 5px;
+}
+.cir-messages::-webkit-scrollbar-track {
+  background: transparent;
+}
+.cir-messages::-webkit-scrollbar-thumb {
+  background: var(--cir-border);
+  border-radius: 4px;
+}
+
+.cir-message {
+  padding: 9px 12px;
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1.6;
+  word-break: break-word;
+  animation: cir-msg-in 0.15s ease;
+}
+
+@keyframes cir-msg-in {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* User bubble — right aligned, soft coral */
+.cir-message-user {
+  background: var(--cir-accent-soft);
+  border: 1px solid var(--cir-accent-border);
+  color: var(--cir-text);
+  align-self: flex-end;
+  max-width: 92%;
+  border-bottom-right-radius: 4px;
+}
+
+/* Assistant bubble — left aligned, neutral surface */
+.cir-message-assistant {
+  background: var(--cir-surface);
+  border: 1px solid var(--cir-border);
+  color: var(--cir-text);
+  align-self: flex-start;
+  max-width: 100%;
+  border-bottom-left-radius: 4px;
+}
+
+/* ─── Per-turn token / cache usage line ───────────────────────────────────────
+   A subtle stat row under each assistant reply. Left-aligned beneath the
+   bubble; the ⚡ part appears only when the turn got a prompt-cache hit.        */
+
+.cir-usage {
+  align-self: flex-start;
+  margin: -2px 0 2px 2px;
+  font-size: 10px;
+  line-height: 1.4;
+  color: var(--cir-faint);
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+  cursor: default;
+  user-select: none;
+}
+
+/* ─── Markdown inside assistant messages ──────────────────────────────────────
+   Styles for the HTML that renderMarkdown() produces                          */
+
+.cir-message-assistant p {
+  margin: 0 0 7px;
+}
+.cir-message-assistant p:last-child {
+  margin-bottom: 0;
+}
+.cir-message-assistant h1,
+.cir-message-assistant h2,
+.cir-message-assistant h3 {
+  font-size: 13px;
+  font-weight: 700;
+  margin: 8px 0 4px;
+  color: var(--cir-text);
+}
+.cir-message-assistant ul {
+  padding-left: 18px;
+  margin: 4px 0;
+}
+.cir-message-assistant li {
+  margin-bottom: 3px;
+}
+.cir-message-assistant code {
+  font-family: 'SF Mono', 'Fira Code', Menlo, Consolas, monospace;
+  font-size: 11.5px;
+  background: var(--cir-code-bg);
+  padding: 1px 5px;
+  border-radius: 4px;
+  color: var(--cir-accent);
+}
+.cir-message-assistant pre {
+  background: var(--cir-card);
+  border: 1px solid var(--cir-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  overflow-x: auto;
+  margin: 6px 0;
+}
+.cir-message-assistant pre code {
+  background: none;
+  padding: 0;
+  font-size: 11px;
+  color: var(--cir-text);
+}
+.cir-message-assistant strong {
+  color: var(--cir-text);
+  font-weight: 600;
+}
+.cir-message-assistant em {
+  color: var(--cir-text-muted);
+}
+
+/* ─── Thinking dots ───────────────────────────────────────────────────────────
+   Shown while waiting for Claude's response                                   */
+
+.cir-thinking {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 10px 12px;
+}
+
+.cir-thinking span {
+  width: 6px;
+  height: 6px;
+  background: var(--cir-accent);
+  border-radius: 50%;
+  animation: cir-bounce 1.2s ease-in-out infinite;
+}
+
+.cir-thinking span:nth-child(1) { animation-delay: 0s; }
+.cir-thinking span:nth-child(2) { animation-delay: 0.2s; }
+.cir-thinking span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes cir-bounce {
+  0%, 80%, 100% {
+    transform: scale(0.55);
+    opacity: 0.4;
+  }
+  40% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* ─── Error bubble ────────────────────────────────────────────────────────────  */
+
+.cir-error {
+  font-size: 12px;
+  color: var(--cir-error);
+  background: var(--cir-error-soft);
+  border: 1px solid var(--cir-error-border);
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+
+/* ─── Input area ──────────────────────────────────────────────────────────────  */
+
+.cir-input-area {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--cir-border);
+  flex-shrink: 0;
+  background: var(--cir-bg);
+}
+
+.cir-textarea {
+  flex: 1;
+  background: var(--cir-surface);
+  border: 1px solid var(--cir-border);
+  border-radius: 10px;
+  color: var(--cir-text);
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 9px 11px;
+  resize: none;
+  outline: none;
+  min-height: 38px;
+  max-height: 120px;
+  overflow-y: auto;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.cir-textarea::placeholder {
+  color: var(--cir-faint);
+}
+
+.cir-textarea:focus {
+  border-color: var(--cir-accent);
+  box-shadow: 0 0 0 3px var(--cir-accent-soft);
+}
+
+.cir-send-btn {
+  flex-shrink: 0;
+  width: 38px;
+  height: 38px;
+  background: var(--cir-accent);
+  border: none;
+  border-radius: 10px;
+  color: #ffffff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s, transform 0.1s;
+}
+
+.cir-send-btn:hover {
+  background: var(--cir-accent-hover);
+  transform: scale(1.05);
+}
+
+.cir-send-btn:active {
+  transform: scale(0.94);
+}
+
+.cir-send-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* ─── Toast ───────────────────────────────────────────────────────────────────
+   Shown when the user tries to ask without an API key set                     */
+
+.cir-toast {
+  position: fixed;
+  z-index: 2147483641;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(12px);
+  opacity: 0;
+
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 11px 18px;
+
+  background: var(--cir-surface);
+  color: var(--cir-text);
+  border: 1px solid var(--cir-border);
+  border-radius: 999px;
+  font-size: 13px;
+
+  box-shadow: 0 8px 30px var(--cir-shadow);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  pointer-events: none;
+}
+
+/* Adding this class triggers the fade-in */
+.cir-toast--visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.cir-toast strong {
+  color: var(--cir-accent);
+  font-weight: 600;
+}

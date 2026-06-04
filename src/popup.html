@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sidenote</title>
+    <style>
+      /* ── claude.ai brand palette ── */
+      :root {
+        --bg: #faf9f5;
+        --surface: #ffffff;
+        --card: #f0eee6;
+        --border: #e8e6dc;
+        --text: #141413;
+        --text-muted: #73726b;
+        --faint: #b0aea5;
+        --accent: #d97757;
+        --accent-hover: #c25f3f;
+        --accent-soft: rgba(217, 119, 87, 0.12);
+        --success: #6f7d4e;
+        --error: #b91c1c;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #262624;
+          --surface: #30302e;
+          --card: #1f1e1d;
+          --border: #3e3d3a;
+          --text: #f5f4ee;
+          --text-muted: #c2c0b6;
+          --faint: #8a887f;
+          --accent: #d97757;
+          --accent-hover: #e08a6e;
+          --accent-soft: rgba(217, 119, 87, 0.16);
+          --success: #a3b17e;
+          --error: #fca5a5;
+        }
+      }
+
+      *, *::before, *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        width: 320px;
+        background: var(--bg);
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica,
+          Arial, sans-serif;
+        padding: 20px;
+      }
+
+      /* ── Header ── */
+
+      .header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 24px;
+      }
+
+      .logo {
+        width: 36px;
+        height: 36px;
+        background: var(--accent);
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+      }
+
+      .logo svg {
+        display: block;
+      }
+
+      .header-text h1 {
+        font-size: 15px;
+        font-weight: 700;
+        color: var(--text);
+      }
+
+      .header-text p {
+        font-size: 11px;
+        color: var(--text-muted);
+        margin-top: 2px;
+      }
+
+      /* ── Form fields ── */
+
+      .field {
+        margin-bottom: 16px;
+      }
+
+      label {
+        display: block;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+        color: var(--accent);
+        margin-bottom: 7px;
+      }
+
+      input[type="password"],
+      select {
+        width: 100%;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        color: var(--text);
+        font-size: 13px;
+        padding: 9px 12px;
+        outline: none;
+        transition: border-color 0.15s, box-shadow 0.15s;
+        appearance: none;
+      }
+
+      input[type="password"] {
+        font-family: 'SF Mono', 'Fira Code', Menlo, monospace;
+        letter-spacing: 0.05em;
+      }
+
+      input[type="password"]::placeholder {
+        color: var(--faint);
+        font-family: -apple-system, sans-serif;
+        letter-spacing: normal;
+      }
+
+      input[type="password"]:focus,
+      select:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px var(--accent-soft);
+      }
+
+      /* Custom dropdown arrow for the select */
+      .select-wrapper {
+        position: relative;
+      }
+
+      .select-wrapper::after {
+        content: '';
+        position: absolute;
+        right: 12px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 0;
+        height: 0;
+        border-left: 4px solid transparent;
+        border-right: 4px solid transparent;
+        border-top: 5px solid var(--accent);
+        pointer-events: none;
+      }
+
+      select {
+        cursor: pointer;
+        padding-right: 32px; /* room for the custom arrow */
+      }
+
+      /* Style the dropdown options — limited browser support
+         but improves Firefox and some Chromium builds */
+      select option {
+        background: var(--surface);
+        color: var(--text);
+        padding: 8px;
+      }
+
+      .hint {
+        font-size: 11px;
+        color: var(--text-muted);
+        margin-top: 6px;
+        line-height: 1.5;
+      }
+
+      .hint a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+
+      .hint a:hover {
+        color: var(--accent-hover);
+        text-decoration: underline;
+      }
+
+      /* ── Model description ── */
+
+      .model-description {
+        font-size: 11px;
+        color: var(--text-muted);
+        margin-top: 6px;
+        min-height: 16px;
+        transition: color 0.15s;
+      }
+
+      /* ── Context-scope toggle ── */
+
+      .toggle-row {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        cursor: pointer;
+        margin-bottom: 0;
+        text-transform: none;
+        letter-spacing: normal;
+      }
+
+      .toggle-row input[type="checkbox"] {
+        width: 16px;
+        height: 16px;
+        accent-color: var(--accent);
+        cursor: pointer;
+        flex-shrink: 0;
+      }
+
+      .toggle-text {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text);
+      }
+
+      /* ── Save button ── */
+
+      .btn-save {
+        width: 100%;
+        margin-top: 4px;
+        background: var(--accent);
+        border: none;
+        border-radius: 9px;
+        color: white;
+        font-size: 13px;
+        font-weight: 600;
+        padding: 10px;
+        cursor: pointer;
+        transition: background 0.12s, transform 0.1s;
+      }
+
+      .btn-save:hover {
+        background: var(--accent-hover);
+      }
+
+      .btn-save:active {
+        transform: scale(0.98);
+      }
+
+      /* ── Status message ── */
+
+      .status {
+        text-align: center;
+        font-size: 12px;
+        margin-top: 10px;
+        min-height: 18px;
+        transition: color 0.15s;
+      }
+
+      .status--success { color: var(--success); }
+      .status--error   { color: var(--error); }
+
+      /* ── Divider ── */
+
+      hr {
+        border: none;
+        border-top: 1px solid var(--border);
+        margin: 20px 0;
+      }
+
+      /* ── How it works ── */
+
+      .how-to-title {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+        color: var(--faint);
+        margin-bottom: 12px;
+      }
+
+      .step {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 10px;
+        align-items: flex-start;
+      }
+
+      .step-num {
+        flex-shrink: 0;
+        width: 20px;
+        height: 20px;
+        background: var(--accent-soft);
+        border-radius: 50%;
+        font-size: 10px;
+        font-weight: 800;
+        color: var(--accent);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-top: 1px;
+      }
+
+      .step-text {
+        font-size: 12px;
+        color: var(--text-muted);
+        line-height: 1.6;
+      }
+
+      .step-text strong {
+        color: var(--text);
+        font-weight: 600;
+      }
+    </style>
+  </head>
+  <body>
+
+    <!-- Header -->
+    <div class="header">
+      <div class="logo">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+             stroke="white" stroke-width="2.5">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+        </svg>
+      </div>
+      <div class="header-text">
+        <h1>Sidenote</h1>
+        <p>Ask Claude about any text, right where you are</p>
+      </div>
+    </div>
+
+    <!-- API Key field -->
+    <div class="field">
+      <label for="apiKey">Anthropic API Key</label>
+      <input
+        type="password"
+        id="apiKey"
+        placeholder="sk-ant-api03-…"
+        autocomplete="off"
+        spellcheck="false"
+      />
+      <div class="hint">
+        Get yours at
+        <a href="https://console.anthropic.com/keys" target="_blank">
+          console.anthropic.com/keys
+        </a>
+      </div>
+    </div>
+
+    <!-- Model selector -->
+    <div class="field">
+      <label for="modelSelect">Model</label>
+      <div class="select-wrapper">
+        <select id="modelSelect"></select>
+      </div>
+      <div class="model-description" id="modelDescription"></div>
+    </div>
+
+    <!-- Context scope -->
+    <div class="field">
+      <label class="toggle-row" for="includePageContext">
+        <input type="checkbox" id="includePageContext" checked />
+        <span class="toggle-text">Send full page conversation as context</span>
+      </label>
+      <div class="hint">
+        On claude.ai, includes the whole visible thread so answers stay grounded.
+        Turn off to send only the highlighted text and use fewer tokens.
+      </div>
+    </div>
+
+    <!-- Save button -->
+    <button class="btn-save" id="saveBtn">Save Settings</button>
+    <div class="status" id="status"></div>
+
+    <hr />
+
+    <!-- How it works -->
+    <div class="how-to-title">How it works</div>
+
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-text">
+        <strong>Highlight any text</strong> on any page (on claude.ai the whole
+        conversation is included as context)
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-text">
+        Click <strong>"Ask about this"</strong>, right-click →
+        <strong>Ask Claude</strong>, or press <strong>⌘/Ctrl + Shift + L</strong>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-text">
+        Ask follow-ups in the panel. Open <strong>several sessions</strong> at
+        once — drag, resize, or minimize them
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-text">
+        Sessions <strong>survive reloads</strong>, and you can copy any one as
+        Markdown
+      </div>
+    </div>
+
+    <script src="popup.ts" type="module"></script>
+  </body>
+</html>

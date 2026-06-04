@@ -1,0 +1,256 @@
+# Sidenote
+
+A Chrome (Manifest V3) browser extension. Highlight text **on any web page**, ask
+Claude about it, and get the answer as a note right beside your selection — no
+tab-switching, no losing your place. On **claude.ai** it also pulls the whole
+on-screen conversation in as context.
+
+---
+
+## What it does
+
+- **Select → ask → answer, inline.** Highlight any text; a floating *"Ask about
+  this"* button appears. Click it and a small chat panel opens next to the
+  selection. Ask a question, get a Markdown-rendered answer.
+- **Follow-up conversations.** Each panel is a real conversation — keep asking
+  follow-ups and the panel remembers the thread.
+- **Multiple sessions at once.** Every selection opens its own independent
+  panel. Run several side by side; each has its own history.
+- **Full claude.ai context.** On claude.ai, the panel sends the entire visible
+  conversation to Claude so answers are grounded in what you were reading. On
+  other sites it falls back to just the highlighted text.
+- **Movable, resizable, minimizable.** Drag a panel by its header, resize it
+  from any corner, or click outside to collapse it into a labelled pill in a
+  dock. Hover the pill to see what the session was about; click to reopen.
+- **Survives reloads.** Open sessions (position, size, conversation, minimized
+  state) are saved per-page and restored when you reload.
+- **Three ways to trigger:** the floating button, a right-click menu item, or a
+  keyboard shortcut (`⌘/Ctrl + Shift + L`).
+- **Looks like claude.ai.** Uses Anthropic's ivory + coral palette, inherits
+  the page's fonts on-site, and follows light/dark mode automatically.
+
+It talks to the **Anthropic API directly** using *your own* API key (stored in
+`chrome.storage.sync`). It is **not** connected to your claude.ai login or
+subscription — it's a separate, stateless API conversation billed to your API
+credits.
+
+---
+
+## How it works (architecture)
+
+The extension has three runtime contexts, plus shared modules:
+
+```
+┌─────────────────────┐     message      ┌──────────────────────┐
+│  background.ts       │ ───────────────▶ │  content.ts          │
+│  (service worker)    │  cir-ask-        │  (injected on every  │
+│  • context menu      │   selection      │   http/https page)   │
+│  • keyboard command  │                  │  • selection detect  │
+└─────────────────────┘                  │  • session manager   │
+                                          │  • persistence       │
+┌─────────────────────┐                  └──────────┬───────────┘
+│  popup.html/.ts      │                             │ creates
+│  (toolbar settings)  │   chrome.storage.sync       ▼
+│  • API key + model   │ ◀───────────────▶  ┌──────────────────┐
+└─────────────────────┘                     │  panel.ts        │
+                                             │  one per session │
+                                             │  → api.ts        │
+                                             └──────────────────┘
+```
+
+### The flow, step by step
+
+1. **Selection** — `content.ts` listens for `mouseup`, reads the selection, and
+   (unless it's inside the extension's own UI) shows the floating button via
+   `floatingButton.ts`.
+2. **Trigger** — clicking the button (or the right-click menu / shortcut routed
+   through `background.ts`) calls `openPanelFromContext()`.
+3. **Context capture** — `scrapeConversation()` reads every
+   `[data-message-author-role]` element on the page (claude.ai's message
+   markup) to build the conversation as context. Off claude.ai this is empty.
+4. **Panel** — `createPanel()` (in `panel.ts`) mounts the chat panel, seeded
+   with that conversation and the selected text.
+5. **Ask** — on send, `panel.ts` calls `sendMessage()` in `api.ts`, which POSTs
+   to `https://api.anthropic.com/v1/messages` with your key. The request body is
+   `[...seed, ...panelQA]`; the selected text goes in the system prompt.
+6. **Render** — the reply is rendered with the tiny Markdown converter in
+   `markdown.ts` and appended to the panel.
+7. **Persist** — after any change, `content.ts` debounce-saves all open sessions
+   to `chrome.storage.local` (keyed by page URL) via `storage.ts`.
+
+### Conversation model
+
+Each panel keeps two separate lists (`panel.ts` → `PanelState`):
+
+- **`seed`** — the page conversation captured as context. Sent to the API on
+  every call, but **never rendered** in the panel (it's already on the page).
+- **`messages`** — the panel's own Q&A. Both rendered *and* sent.
+
+The API receives `[...seed, ...messages]`. `api.ts`'s `normalizeMessages()` then
+makes that list valid for Anthropic (must start with a `user` turn, roles must
+strictly alternate) by dropping leading assistant turns and merging consecutive
+same-role turns.
+
+---
+
+## Context & session management
+
+### A new session is created on every trigger
+There is **no "continue the last panel" path**. All three entry points —
+`onAskClick` (floating button) and the `cir-ask-selection` message listener
+(right-click / keyboard shortcut) — call `openPanelFromContext()`, which calls
+`createPanel({ id: newId(), messages: [], seed: scrapeConversation() })`.
+
+So **each selection opens a brand-new, independent session**; existing panels
+stay open and unaffected. The only path that *doesn't* create fresh state is
+`restoreSession()` on page load, which reuses the **saved** `id`, `seed`, and
+`messages`.
+
+### Where each session's context comes from
+A session blends two sources, kept separate in `PanelState`:
+
+| Source | What | Captured | Sent? | Shown? |
+|--------|------|----------|-------|--------|
+| `seed` | The claude.ai page conversation | **Once**, at session creation (`scrapeConversation()`) | yes | no |
+| `messages` | This panel's own Q&A | Grows with each follow-up | yes | yes |
+
+Every request is `system = <selected text>` + `messages = [...seed, ...messages]`.
+The selected text rides in the **system prompt on every call**, so it's always in
+context regardless of thread length.
+
+### `seed` is a frozen snapshot
+`scrapeConversation()` runs **only at open time**. A session's `seed` never
+updates afterward:
+
+- If the claude.ai conversation grows after a panel is open, that panel won't see
+  the new messages — open a new session to include them.
+- Panels opened at different times can hold different seeds.
+- On reload, the **saved** seed is restored (not re-scraped), keeping the session
+  consistent with what it originally captured.
+- It's entirely **client-side** — there is no server session id. Continuity is
+  just re-sending the two arrays each turn. This conversation is also completely
+  separate from the user's claude.ai login/session.
+
+---
+
+## File guide
+
+| File | Responsibility |
+|------|----------------|
+| `src/content.ts` | Injected into every page. Selection detection, the session list, opening/restoring panels, persistence, and the background-trigger listener. |
+| `src/panel.ts` | A single inline session: DOM, drag, 4-corner resize, minimize→dock, send handler, and `serialize()` for persistence. Exports `createPanel()` and the `Panel` interface. |
+| `src/floatingButton.ts` | The *"Ask about this"* button shown near a selection. |
+| `src/api.ts` | Anthropic API client. `sendMessage()`, model list, `normalizeMessages()`. |
+| `src/markdown.ts` | Minimal Markdown→HTML renderer (with HTML escaping). |
+| `src/storage.ts` | Load/save sessions in `chrome.storage.local`, keyed by `origin + pathname`. |
+| `src/background.ts` | Service worker: context-menu item and keyboard command → message the active tab. |
+| `src/popup.html` / `src/popup.ts` | Toolbar popup: enter API key, choose model. Writes to `chrome.storage.sync`. |
+| `src/types.ts` | Shared types: `Message`, `SelectionContext`, `ApiConfig`, `PanelGeometry`, `SavedSession`, etc. |
+| `src/content.css` | All injected UI styles. Theme tokens (`--cir-*`) with a `prefers-color-scheme: dark` block. |
+| `src/vite-env.d.ts` | Ambient types for `*.css` imports and the `chrome` namespace. |
+| `public/manifest.json` | MV3 manifest: permissions, content script, background worker, commands. |
+
+### Key design choices
+
+- **No framework, no classes.** Everything is plain functions returning plain
+  objects (e.g. `createPanel` returns a `Panel` with `contains`/`minimize`/
+  `destroy`/`serialize`). State is held in explicit objects and passed in.
+- **Self-contained UI.** All injected elements are prefixed `cir-` and styles are
+  scoped to those classes, so the extension doesn't fight the host page. On-page
+  panels use `font-family: inherit` to match the site's type.
+- **Graceful degradation.** DOM scraping returns `[]` rather than throwing if
+  claude.ai's markup changes, and the panel falls back to selection-only context.
+
+---
+
+## Features in detail
+
+### Panels (sessions)
+- Created per selection; multiple can be open. New panels **cascade** so they
+  don't stack exactly on top of each other.
+- **Drag** by the header. **Resize** from any of the four corners (each anchors
+  the opposite edges; min size 280×220). **Escape** closes the most recent
+  panel; the **✕** closes a specific one.
+
+### Minimize dock
+- Clicking **outside** all panels collapses them into labelled **pills** in a
+  fixed bottom-right dock (flexbox-stacked, newest nearest the corner).
+- Each pill shows a short snippet of the selected text; **hovering** reveals the
+  fuller description. Clicking a pill re-expands that session.
+
+### Persistence
+- Sessions are saved to `chrome.storage.local` under a per-page key and restored
+  on reload — including position, size, conversation, and minimized state.
+- Restored panels skip the selection highlight (the original DOM range is gone).
+
+### Triggers
+- **Floating button** near the selection.
+- **Right-click → "Ask Claude about '…'"** (context-menu, via `background.ts`).
+- **Keyboard:** `⌘/Ctrl + Shift + L` (configurable at `chrome://extensions/shortcuts`).
+
+### Settings (popup)
+- **API key** (`sk-ant-…`, validated for the right prefix), **model**
+  (Opus / Sonnet / Haiku), and a **"Send full page conversation as context"**
+  toggle (`includePageContext`, default on). All stored in `chrome.storage.sync`
+  and picked up live by open pages.
+
+---
+
+## Build & develop
+
+This project uses **Yarn 4 (PnP)**, **TypeScript**, and **Vite** with
+**`@crxjs/vite-plugin`** (which compiles the TS entry points and rewrites the
+manifest).
+
+```bash
+yarn install        # install dependencies (required once)
+yarn dev            # vite build --watch — rebuilds dist/ on change
+yarn build          # one-off production build into dist/
+yarn type-check     # tsc --noEmit
+```
+
+### Load the extension
+1. `yarn build` (or `yarn dev` for watch mode).
+2. Open `chrome://extensions`, enable **Developer mode**.
+3. **Load unpacked** → select the `dist/` folder.
+4. After changing the manifest, permissions, or the service worker, click the
+   extension's **reload** button (watch mode only rebuilds files, it doesn't
+   re-grant permissions).
+5. Open the popup and paste your Anthropic API key.
+
+---
+
+## Permissions & privacy
+
+- **`storage`** — saves your API key/model (`sync`) and open sessions (`local`).
+- **`contextMenus`** — the right-click entry.
+- **`host_permissions: https://api.anthropic.com/*`** — to call the API.
+- **Content script on `http/https://*/*`** — so you can select text anywhere.
+
+Your selected text (and, on claude.ai, the visible conversation) is sent to the
+Anthropic API using your key. Nothing is sent anywhere else. The extension has
+no connection to your claude.ai account.
+
+---
+
+## Known limitations / things to watch
+
+- **claude.ai SPA navigation:** session restore runs once when the content
+  script loads. Switching chats in-app (no full reload) changes the page key, so
+  sessions won't auto-reopen until an actual reload.
+- **DOM coupling:** conversation scraping depends on claude.ai's
+  `data-message-author-role` markup; if that changes, context falls back to the
+  selection only.
+- **Cross-origin API calls:** the request now fires from arbitrary sites; strict
+  page CSPs could block it on some pages.
+- **Cost:** on long claude.ai threads the whole conversation is sent each call.
+  This is mitigated by **prompt caching** (`withConversationCache()` in
+  `api.ts`): a `cache_control` breakpoint on the last message caches the whole
+  prefix (system + `seed` + prior Q&A), so after the first turn it's re-read at
+  ~10% of the input price instead of re-tokenised in full. Prefixes under the
+  model's cache minimum (~2–4K tokens) silently don't cache. Two related
+  controls also exist: a **context-scope toggle** in the popup
+  (`includePageContext`) that sends only the selection instead of the whole
+  thread, and a **per-turn usage line** under each reply (`createUsageElement`
+  in `panel.ts`) that surfaces token counts and cache hits from the response's
+  `usage`.

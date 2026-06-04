@@ -1,4 +1,17 @@
 {
-  "name": "claude-inline-reply",
-  "packageManager": "yarn@4.8.1"
+  "name": "sidenote",
+  "version": "1.0.0",
+  "description": "Chrome extension that lets you highlight text on any web page and ask Claude about it — answers appear as a note right beside your selection.",
+  "scripts": {
+    "dev": "vite build --watch",
+    "build": "vite build",
+    "type-check": "tsc --noEmit"
+  },
+  "packageManager": "yarn@4.8.1+sha512.bc946f2a022d7a1a38adfc15b36a66a3807a67629789496c3714dd1703d2e6c6b1c69ff9ec3b43141ac7a1dd853b7685638eb0074300386a59c18df351ef8ff6",
+  "devDependencies": {
+    "@crxjs/vite-plugin": "^2.4.0",
+    "@types/chrome": "^0.1.42",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.16"
+  }
 }
