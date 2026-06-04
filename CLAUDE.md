@@ -211,9 +211,18 @@ updates afterward:
 
 ## Build & develop
 
-This project uses **Yarn 4 (PnP)**, **TypeScript**, and **Vite** with
+This project uses **Yarn 4 (PnP)**, **TypeScript**, and **Vite 6** with
 **`@crxjs/vite-plugin`** (which compiles the TS entry points and rewrites the
 manifest).
+
+> **Service-worker build note:** `vite.config.ts` adds an `inlineServiceWorker`
+> plugin. `@crxjs` normally emits the worker as a loader that `import`s the
+> background chunk as an ES module, which Chrome can refuse to register
+> (*"Service worker registration failed. Status code: 2"* → no `onInstalled`, so
+> context menus never get created). The plugin inlines the chunk into
+> `service-worker-loader.js` so the worker is self-contained with no imports.
+> Don't remove it, and keep Vite pinned to 6.x (the range `@crxjs` 2.4.0 is
+> tested against).
 
 ```bash
 yarn install        # install dependencies (required once)
@@ -226,10 +235,15 @@ yarn type-check     # tsc --noEmit
 1. `yarn build` (or `yarn dev` for watch mode).
 2. Open `chrome://extensions`, enable **Developer mode**.
 3. **Load unpacked** → select the `dist/` folder.
-4. After changing the manifest, permissions, or the service worker, click the
-   extension's **reload** button (watch mode only rebuilds files, it doesn't
-   re-grant permissions).
-5. Open the popup and paste your Anthropic API key.
+4. After changing the manifest, permissions, or the service worker, do a clean
+   **Remove + Load unpacked** (and fully quit Chrome for service-worker changes)
+   — the ↻ button doesn't reliably re-register a changed worker, and watch mode
+   only rebuilds files.
+5. **Refresh any open test tabs** — content scripts are only injected on page
+   load, so after a reload the old script is orphaned ("Extension context
+   invalidated") until you refresh. Note the floating chips are content-script
+   only, so they can work even when the background/service worker is broken.
+6. Open the popup and paste your Anthropic API key.
 
 ---
 

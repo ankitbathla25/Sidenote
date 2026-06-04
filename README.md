@@ -23,7 +23,9 @@ yarn build           # outputs to dist/
 1. Open `chrome://extensions`, turn on **Developer mode**.
 2. **Load unpacked** → select the `dist/` folder.
 3. Click the extension icon and paste your Anthropic API key (`sk-ant-…`).
-4. Highlight some text on any page and click **"Ask about this"**.
+4. Highlight some text on any page and click **Ask** (or a quick-action chip)
+   in the floating toolbar — or right-click an image → **"Ask Claude about this
+   image"**.
 
 Use `yarn dev` for a watch build while developing.
 
