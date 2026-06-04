@@ -22,17 +22,22 @@ const triggerAskImage = (tabId: number, srcUrl: string): void => {
   })
 }
 
-// Create the context-menu items once, when the extension is installed/updated
+// Create the context-menu items when the extension is installed/updated.
+// removeAll() first so a reload (where the old items may still exist) doesn't
+// throw a "duplicate id" error on the first create — which would abort before
+// the rest of the menu items were registered.
 chrome.runtime.onInstalled.addListener(() => {
-  chrome.contextMenus.create({
-    id: MENU_ID,
-    title: 'Ask Claude about “%s”',
-    contexts: ['selection'],
-  })
-  chrome.contextMenus.create({
-    id: IMAGE_MENU_ID,
-    title: 'Ask Claude about this image',
-    contexts: ['image'],
+  chrome.contextMenus.removeAll(() => {
+    chrome.contextMenus.create({
+      id: MENU_ID,
+      title: 'Ask Claude about “%s”',
+      contexts: ['selection'],
+    })
+    chrome.contextMenus.create({
+      id: IMAGE_MENU_ID,
+      title: 'Ask Claude about this image',
+      contexts: ['image'],
+    })
   })
 })
 
