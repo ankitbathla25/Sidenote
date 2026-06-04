@@ -9,9 +9,10 @@ on-screen conversation in as context.
 
 ## What it does
 
-- **Select → ask → answer, inline.** Highlight any text; a floating *"Ask about
-  this"* button appears. Click it and a small chat panel opens next to the
-  selection. Ask a question, get a Markdown-rendered answer.
+- **Select → ask → answer, inline.** Highlight any text; a floating toolbar of
+  quick-action chips appears. Click **Ask** for a free-form question, or a preset
+  (**Explain / Summarize / Simplify**) to fire it instantly. A small chat panel
+  opens next to the selection and the answer **streams in live**, Markdown-rendered.
 - **Follow-up conversations.** Each panel is a real conversation — keep asking
   follow-ups and the panel remembers the thread.
 - **Multiple sessions at once.** Every selection opens its own independent
@@ -24,7 +25,7 @@ on-screen conversation in as context.
   dock. Hover the pill to see what the session was about; click to reopen.
 - **Survives reloads.** Open sessions (position, size, conversation, minimized
   state) are saved per-page and restored when you reload.
-- **Three ways to trigger:** the floating button, a right-click menu item, or a
+- **Three ways to trigger:** the floating toolbar, a right-click menu item, or a
   keyboard shortcut (`⌘/Ctrl + Shift + L`).
 - **Looks like claude.ai.** Uses Anthropic's ivory + coral palette, inherits
   the page's fonts on-site, and follows light/dark mode automatically.
@@ -61,10 +62,13 @@ The extension has three runtime contexts, plus shared modules:
 ### The flow, step by step
 
 1. **Selection** — `content.ts` listens for `mouseup`, reads the selection, and
-   (unless it's inside the extension's own UI) shows the floating button via
-   `floatingButton.ts`.
-2. **Trigger** — clicking the button (or the right-click menu / shortcut routed
-   through `background.ts`) calls `openPanelFromContext()`.
+   (unless it's inside the extension's own UI) shows the floating toolbar via
+   `floatingButton.ts` — a row of quick-action chips (Ask / Explain / Summarize /
+   Simplify) defined in `actions.ts`.
+2. **Trigger** — clicking a chip calls `openPanelFromContext()`. The plain
+   **Ask** chip (and the right-click menu / shortcut routed through
+   `background.ts`) opens a free-form panel; the other chips pass a preset
+   `initialPrompt` that the panel auto-sends on open.
 3. **Context capture** — `scrapeConversation()` reads claude.ai's message
    elements (`[data-testid="user-message"]` for user turns,
    `.font-claude-response` for assistant turns, with a legacy
@@ -73,10 +77,12 @@ The extension has three runtime contexts, plus shared modules:
 4. **Panel** — `createPanel()` (in `panel.ts`) mounts the chat panel, seeded
    with that conversation and the selected text.
 5. **Ask** — on send, `panel.ts` calls `sendMessage()` in `api.ts`, which POSTs
-   to `https://api.anthropic.com/v1/messages` with your key. The request body is
-   `[...seed, ...panelQA]`; the selected text goes in the system prompt.
-6. **Render** — the reply is rendered with the tiny Markdown converter in
-   `markdown.ts` and appended to the panel.
+   to `https://api.anthropic.com/v1/messages` with your key and `stream: true`.
+   The request body is `[...seed, ...panelQA]`; the selected text goes in the
+   system prompt.
+6. **Render** — `sendMessage()` parses the SSE stream and fires an `onText`
+   callback for each token; `panel.ts` re-renders the growing reply live with the
+   tiny Markdown converter in `markdown.ts`, so the answer types out in place.
 7. **Persist** — after any change, `content.ts` debounce-saves all open sessions
    to `chrome.storage.local` (keyed by page URL) via `storage.ts`.
 
@@ -99,8 +105,8 @@ same-role turns.
 
 ### A new session is created on every trigger
 There is **no "continue the last panel" path**. All three entry points —
-`onAskClick` (floating button) and the `cir-ask-selection` message listener
-(right-click / keyboard shortcut) — call `openPanelFromContext()`, which calls
+`onActionClick` (floating toolbar chips) and the `cir-ask-selection` message
+listener (right-click / keyboard shortcut) — call `openPanelFromContext()`, which calls
 `createPanel({ id: newId(), messages: [], seed: scrapeConversation() })`.
 
 So **each selection opens a brand-new, independent session**; existing panels
@@ -141,8 +147,9 @@ updates afterward:
 |------|----------------|
 | `src/content.ts` | Injected into every page. Selection detection, the session list, opening/restoring panels, persistence, and the background-trigger listener. |
 | `src/panel.ts` | A single inline session: DOM, drag, 4-corner resize, minimize→dock, send handler, and `serialize()` for persistence. Exports `createPanel()` and the `Panel` interface. |
-| `src/floatingButton.ts` | The *"Ask about this"* button shown near a selection. |
-| `src/api.ts` | Anthropic API client. `sendMessage()`, model list, `normalizeMessages()`. |
+| `src/floatingButton.ts` | The floating toolbar of quick-action chips shown near a selection; reports the clicked action via an `onAction(id)` callback. |
+| `src/actions.ts` | The quick-action definitions (`QUICK_ACTIONS`: id, label, preset prompt) shared by the toolbar and `content.ts`. |
+| `src/api.ts` | Anthropic API client. Streaming `sendMessage()` (SSE → `onText` chunks + usage), model list, `normalizeMessages()`, `withConversationCache()`. |
 | `src/markdown.ts` | Minimal Markdown→HTML renderer (with HTML escaping). |
 | `src/storage.ts` | Load/save sessions in `chrome.storage.local`, keyed by `origin + pathname`. |
 | `src/background.ts` | Service worker: context-menu item and keyboard command → message the active tab. |

@@ -1,57 +1,69 @@
-// The only thing the outside world needs to know about the button's position
+import { QUICK_ACTIONS } from './actions'
+
+// The only thing the outside world needs to know about the toolbar's position
 export interface ButtonPosition {
   x: number
   y: number
 }
 
-// Creates the floating button DOM element — pure function, no side effects
+// SVG for the primary "Ask" chip
+const ASK_ICON = `
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+  </svg>`
+
+// Creates the floating toolbar: a row of one-click action chips plus the
+// free-form "Ask" chip. Pure function, no side effects.
 const createButtonElement = (): HTMLDivElement => {
-  const btn = document.createElement('div')
-  btn.className = 'cir-float-btn'
-  btn.setAttribute('role', 'button')
-  btn.setAttribute('aria-label', 'Ask about selected text')
-  btn.innerHTML = `
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-    </svg>
-    <span>Ask about this</span>
-  `
-  return btn
+  const bar = document.createElement('div')
+  bar.className = 'cir-float-btn'
+  bar.setAttribute('role', 'toolbar')
+  bar.setAttribute('aria-label', 'Ask Claude about the selection')
+
+  bar.innerHTML = QUICK_ACTIONS.map((action) => {
+    const isAsk = action.id === 'ask'
+    const cls = isAsk ? 'cir-float-action cir-float-ask' : 'cir-float-action'
+    const icon = isAsk ? ASK_ICON : ''
+    return `<button class="${cls}" data-action="${action.id}" type="button">${icon}<span>${action.label}</span></button>`
+  }).join('')
+
+  return bar
 }
 
-// Calculates where to place the button based on the selection rectangle
-// Positions it just above the selection, right-aligned to it
+// Calculates where to place the toolbar based on the selection rectangle.
+// Anchors to the selection's left edge, just above it. Horizontal overflow is
+// clamped later in showButton(), once the element's real width is known.
 export const calculateButtonPosition = (
   selectionRect: DOMRect
 ): ButtonPosition => {
-  const BUTTON_WIDTH = 148
-  const BUTTON_HEIGHT = 36
+  const BUTTON_HEIGHT = 38
   const GAP = 8 // pixels above the selection
 
-  const x = Math.max(
-    selectionRect.right + window.scrollX - BUTTON_WIDTH,
-    window.scrollX + GAP
-  )
-
-  const y = selectionRect.top + window.scrollY - BUTTON_HEIGHT - GAP
-
-  return { x, y }
+  return {
+    x: selectionRect.left + window.scrollX,
+    y: selectionRect.top + window.scrollY - BUTTON_HEIGHT - GAP,
+  }
 }
 
-// Moves the button to a position and makes it visible
+// Moves the toolbar to a position and makes it visible, clamping its right edge
+// to the viewport so the (now variable-width) chip row never runs off-screen.
 const showButton = (btn: HTMLDivElement, position: ButtonPosition): void => {
-  btn.style.left = `${position.x}px`
-  btn.style.top = `${position.y}px`
   btn.classList.add('cir-float-btn--visible')
+
+  const width = btn.offsetWidth || 260
+  const maxLeft = window.scrollX + document.documentElement.clientWidth - width - 8
+  const left = Math.max(window.scrollX + 8, Math.min(position.x, maxLeft))
+
+  btn.style.left = `${left}px`
+  btn.style.top = `${position.y}px`
 }
 
-// Hides the button without removing it from the DOM
-// We reuse the same element rather than creating/destroying it repeatedly
+// Hides the toolbar without removing it from the DOM
 const hideButton = (btn: HTMLDivElement): void => {
   btn.classList.remove('cir-float-btn--visible')
 }
 
-// Everything the content script needs to interact with the button
+// Everything the content script needs to interact with the toolbar
 export interface FloatingButton {
   show: (position: ButtonPosition) => void
   hide: () => void
@@ -59,26 +71,23 @@ export interface FloatingButton {
   destroy: () => void
 }
 
-// The one function you call to create a floating button
-// Returns a plain object with just the methods you need — no class, no this
+// The one function you call to create the floating toolbar. `onAction` is
+// invoked with the clicked chip's action id (e.g. "ask", "explain").
 export const createFloatingButton = (
-  onClick: () => void
+  onAction: (actionId: string) => void
 ): FloatingButton => {
   const btn = createButtonElement()
 
-  // Add click handler — stopPropagation so the click
-  // doesn't bubble up and immediately trigger the document
-  // mousedown handler that would hide the button
+  // One delegated handler for all chips. stopPropagation keeps the click from
+  // bubbling to the document mousedown handler that would hide the toolbar.
   btn.addEventListener('click', (e: MouseEvent) => {
     e.stopPropagation()
-    onClick()
+    const chip = (e.target as HTMLElement).closest('[data-action]') as HTMLElement | null
+    if (chip?.dataset.action) onAction(chip.dataset.action)
   })
 
-  // Mount into the page once
   document.body.appendChild(btn)
 
-  // Return a plain object — callers get exactly these four capabilities
-  // and nothing else
   return {
     show: (position: ButtonPosition) => showButton(btn, position),
     hide: () => hideButton(btn),

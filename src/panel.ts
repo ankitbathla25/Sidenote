@@ -450,21 +450,47 @@ const handleSend = async (
   state.messages.push({ role: 'user', content: text })
   onChange() // persist the new question right away
 
-  // Show thinking dots
+  // Show thinking dots until the first streamed token arrives
   const thinking = createThinkingElement()
   messagesEl.appendChild(thinking)
   scrollMessagesToBottom(messagesEl)
 
+  // The assistant bubble is created lazily on the first text delta, then
+  // re-rendered as more text streams in.
+  let assistantEl: HTMLDivElement | null = null
+  let streamed = ''
+
   try {
-    // The request history is the captured page context plus this panel's Q&A
+    // The request history is the captured page context plus this panel's Q&A.
+    // onText fires for every streamed chunk so the answer appears live.
     const reply = await sendMessage(
       config,
       buildSystemPrompt(selectedText),
-      [...state.seed, ...state.messages]
+      [...state.seed, ...state.messages],
+      (chunk) => {
+        if (!assistantEl) {
+          thinking.remove()
+          assistantEl = createMessageElement('assistant', '')
+          messagesEl.appendChild(assistantEl)
+        }
+        const el = assistantEl
+        streamed += chunk
+        el.innerHTML = renderMarkdown(streamed)
+        scrollMessagesToBottom(messagesEl)
+      }
     )
+
+    // Make sure a bubble exists (e.g. an empty reply produced no deltas), then
+    // do a final authoritative render of the complete text.
+    if (!assistantEl) {
+      thinking.remove()
+      assistantEl = createMessageElement('assistant', reply.text)
+      messagesEl.appendChild(assistantEl)
+    } else {
+      ;(assistantEl as HTMLDivElement).innerHTML = renderMarkdown(reply.text)
+    }
+
     state.messages.push({ role: 'assistant', content: reply.text })
-    thinking.remove()
-    messagesEl.appendChild(createMessageElement('assistant', reply.text))
     // Surface this turn's token usage (and any cache savings) under the reply.
     // Display-only — not part of state.messages, so it isn't persisted or resent.
     const usageEl = createUsageElement(reply.usage)
@@ -473,6 +499,7 @@ const handleSend = async (
     onChange() // persist the answer
   } catch (err: unknown) {
     thinking.remove()
+    if (assistantEl) (assistantEl as HTMLDivElement).remove()
     const message = err instanceof Error ? err.message : 'Something went wrong'
     // Remove the failed user message from both the transcript and the DOM so
     // the visible panel and the conversation state stay in agreement (an
@@ -515,6 +542,9 @@ export interface CreatePanelOptions {
   geometry?: PanelGeometry | null
   // Start collapsed into the dock (restored sessions that were minimized)
   startMinimized?: boolean
+  // A prompt to auto-send as soon as the panel opens (from a quick-action chip
+  // like "Explain"). Empty/undefined just opens the panel for a free-form ask.
+  initialPrompt?: string
   // How many panels are already open — cascades a new one so they don't stack
   cascadeIndex?: number
   // Called whenever the session's persistable state changes (messages, move,
@@ -535,6 +565,7 @@ export const createPanel = (options: CreatePanelOptions): Panel => {
     messages = [],
     geometry = null,
     startMinimized = false,
+    initialPrompt = '',
     cascadeIndex = 0,
     onChange,
     onDestroy,
@@ -674,6 +705,14 @@ export const createPanel = (options: CreatePanelOptions): Panel => {
     minimize()
   } else {
     setTimeout(() => textarea.focus(), 80)
+  }
+
+  // Quick-action chips ("Explain", "Summarize", …) pass an initialPrompt — fire
+  // it immediately so the user gets an answer without typing. Free-form "Ask"
+  // passes no prompt, leaving the panel open and focused.
+  if (initialPrompt.trim()) {
+    textarea.value = initialPrompt
+    void send()
   }
 
   // ── Destroy ──────────────────────────────────────────────────────────────

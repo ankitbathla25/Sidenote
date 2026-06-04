@@ -1,4 +1,4 @@
-import type { Message, AnthropicResponse, ContentBlock, ApiConfig, ApiResult } from './types'
+import type { Message, AnthropicResponse, ApiConfig, ApiResult, Usage } from './types'
 
 const API_URL = 'https://api.anthropic.com/v1/messages'
 
@@ -31,12 +31,6 @@ const buildHeaders = (apiKey: string): HeadersInit => ({
   'anthropic-version': '2023-06-01',
   'anthropic-dangerous-direct-browser-access': 'true',
 })
-
-// Extracts the text from Anthropic's response content blocks
-const extractText = (blocks: ContentBlock[]): string => {
-  const textBlock = blocks.find((block) => block.type === 'text')
-  return textBlock?.text ?? ''
-}
 
 // Parses an error response from Anthropic into a readable message
 const parseError = async (response: Response): Promise<string> => {
@@ -117,11 +111,29 @@ const withConversationCache = (messages: Message[]): CacheableMessage[] => {
   return out
 }
 
-// The one function everything else calls — no class, no this, no hidden state
+// Pulls the JSON payload out of one SSE event block (the line starting "data:")
+const parseSSEData = (eventBlock: string): Record<string, unknown> | null => {
+  const dataLine = eventBlock.split('\n').find((l) => l.startsWith('data:'))
+  if (!dataLine) return null
+  const json = dataLine.slice(5).trim()
+  if (!json || json === '[DONE]') return null
+  try {
+    return JSON.parse(json) as Record<string, unknown>
+  } catch {
+    return null
+  }
+}
+
+// The one function everything else calls — no class, no this, no hidden state.
+//
+// Streams the reply: `onText` is invoked with each text delta as it arrives, so
+// the panel can render the answer live instead of waiting for the whole thing.
+// Returns the assembled text plus token usage once the stream completes.
 export const sendMessage = async (
   config: ApiConfig,
   systemPrompt: string,
   messages: Message[],
+  onText: (chunk: string) => void,
   maxTokens: number = 4096
 ): Promise<ApiResult> => {
   const response = await fetch(API_URL, {
@@ -132,6 +144,7 @@ export const sendMessage = async (
       max_tokens: maxTokens,
       system: systemPrompt,
       messages: withConversationCache(normalizeMessages(messages)),
+      stream: true,
     }),
   })
 
@@ -139,7 +152,54 @@ export const sendMessage = async (
     const message = await parseError(response)
     throw new Error(message)
   }
+  if (!response.body) {
+    throw new Error('No response stream received')
+  }
 
-  const data = await response.json() as AnthropicResponse
-  return { text: extractText(data.content ?? []), usage: data.usage }
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let text = ''
+  const usage: Usage = { input_tokens: 0, output_tokens: 0 }
+
+  // Anthropic sends Server-Sent Events: blocks separated by a blank line, each
+  // with a "data: {json}" line. We accumulate text_delta chunks and pull token
+  // counts from message_start (input/cache) and message_delta (final output).
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+
+    const blocks = buffer.split('\n\n')
+    buffer = blocks.pop() ?? '' // keep the trailing, possibly-incomplete block
+
+    for (const block of blocks) {
+      const payload = parseSSEData(block)
+      if (!payload) continue
+
+      if (payload.type === 'message_start') {
+        const u = (payload.message as { usage?: Usage } | undefined)?.usage
+        if (u) {
+          usage.input_tokens = u.input_tokens ?? 0
+          usage.output_tokens = u.output_tokens ?? 0
+          usage.cache_creation_input_tokens = u.cache_creation_input_tokens
+          usage.cache_read_input_tokens = u.cache_read_input_tokens
+        }
+      } else if (payload.type === 'content_block_delta') {
+        const delta = payload.delta as { type?: string; text?: string } | undefined
+        if (delta?.type === 'text_delta' && delta.text) {
+          text += delta.text
+          onText(delta.text)
+        }
+      } else if (payload.type === 'message_delta') {
+        const u = (payload as { usage?: { output_tokens?: number } }).usage
+        if (u?.output_tokens != null) usage.output_tokens = u.output_tokens
+      } else if (payload.type === 'error') {
+        const msg = (payload.error as { message?: string } | undefined)?.message
+        throw new Error(msg ?? 'Streaming error')
+      }
+    }
+  }
+
+  return { text, usage }
 }

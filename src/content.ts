@@ -1,5 +1,6 @@
 import './content.css'
 import { createFloatingButton, calculateButtonPosition } from './floatingButton'
+import { promptForAction } from './actions'
 import { createPanel, type Panel } from './panel'
 import type { SelectionContext, StorageData, ApiConfig, Message, SavedSession } from './types'
 import { DEFAULT_MODEL } from './api'
@@ -79,7 +80,7 @@ const state: PageState = {
 // ─── Floating button ──────────────────────────────────────────────────────────
 // Created once, reused for every selection
 
-const floatingButton = createFloatingButton(onAskClick)
+const floatingButton = createFloatingButton(onActionClick)
 
 // ─── Selection detection ──────────────────────────────────────────────────────
 
@@ -206,7 +207,7 @@ document.addEventListener('mouseup', () => {
       return
     }
 
-    // Save the context so onAskClick can use it
+    // Save the context so onActionClick can use it
     state.pendingContext = context
 
     // Position and show the button near the selection
@@ -268,8 +269,12 @@ const newId = (): string =>
 
 // ─── Opening / restoring panels ─────────────────────────────────────────────────
 
-// Opens a brand-new session from a live selection
-const openPanelFromContext = (context: SelectionContext): void => {
+// Opens a brand-new session from a live selection. `initialPrompt` (from a
+// quick-action chip) is auto-sent on open; omit it for a free-form ask.
+const openPanelFromContext = (
+  context: SelectionContext,
+  initialPrompt = ''
+): void => {
   // Capture the whole on-page conversation so Claude answers with the same
   // context the user is looking at (empty on non-claude.ai pages). When the
   // user has turned page context off, send only the selection to save tokens.
@@ -287,6 +292,7 @@ const openPanelFromContext = (context: SelectionContext): void => {
     config: apiConfig(),
     seed,
     range: context.range,
+    initialPrompt,
     cascadeIndex: state.panels.length,
     onChange: schedulePersist,
     onDestroy: removePanel,
@@ -318,9 +324,11 @@ const restoreSessions = (): void => {
   void loadSessions().then((sessions) => sessions.forEach(restoreSession))
 }
 
-// ─── Ask button click ─────────────────────────────────────────────────────────
+// ─── Floating toolbar click ─────────────────────────────────────────────────
+// A chip was clicked. "ask" opens a free-form panel; every other action opens a
+// panel and immediately sends its preset prompt about the selection.
 
-function onAskClick(): void {
+function onActionClick(actionId: string): void {
   if (!state.pendingContext) return
 
   // Guard: make sure the user has set their API key
@@ -330,7 +338,7 @@ function onAskClick(): void {
   }
 
   floatingButton.hide()
-  openPanelFromContext(state.pendingContext)
+  openPanelFromContext(state.pendingContext, promptForAction(actionId))
   state.pendingContext = null
 }
 

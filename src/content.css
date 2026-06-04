@@ -76,30 +76,53 @@
   position: absolute;
   z-index: 2147483640;
 
-  /* Hidden by default — shown by adding the --visible modifier class */
+  /* Hidden by default — shown by adding the --visible modifier class.
+     This is now a container holding the action chips. */
   display: none;
   align-items: center;
-  gap: 6px;
-  padding: 7px 14px;
+  gap: 2px;
+  padding: 3px;
 
-  background: var(--cir-accent);
-  color: #ffffff;
+  background: var(--cir-surface);
   border-radius: 999px;
-  font-size: 12.5px;
-  font-weight: 500;
-  letter-spacing: 0.01em;
-  cursor: pointer;
   white-space: nowrap;
   user-select: none;
 
   box-shadow:
     0 4px 16px var(--cir-shadow),
-    0 0 0 1px rgba(0, 0, 0, 0.04);
+    0 0 0 1px rgba(0, 0, 0, 0.06);
+}
 
-  transition:
-    transform 0.12s ease,
-    box-shadow 0.12s ease,
-    background 0.12s ease;
+/* One clickable action chip inside the toolbar */
+.cir-float-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  border: none;
+  background: transparent;
+  color: var(--cir-text);
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.cir-float-action:hover {
+  background: var(--cir-card);
+}
+
+/* The primary free-form "Ask" chip keeps the accent fill so it stands out */
+.cir-float-ask {
+  background: var(--cir-accent);
+  color: #ffffff;
+}
+
+.cir-float-ask:hover {
+  background: var(--cir-accent-hover);
+  color: #ffffff;
 }
 
 /* Adding this class makes the button appear */
@@ -108,13 +131,6 @@
   animation: cir-pop 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-.cir-float-btn:hover {
-  background: var(--cir-accent-hover);
-  transform: translateY(-1px);
-  box-shadow:
-    0 6px 22px var(--cir-shadow),
-    0 0 0 1px rgba(0, 0, 0, 0.06);
-}
 
 @keyframes cir-pop {
   from {

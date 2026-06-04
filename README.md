@@ -32,14 +32,25 @@ Use `yarn dev` for a watch build while developing.
 ## Features
 
 ### 1. Ask about any selection, inline
-Highlight ≥ 5 characters of text and a small **"Ask about this"** button appears
-just above the selection. Click it and a chat panel opens beside the text. Type
-a question, hit Enter, and the answer appears in place — your reading position
-never moves.
+Highlight ≥ 5 characters of text and a small **floating toolbar** appears just
+above the selection. Click **Ask** to type your own question, or a one-click
+preset (**Explain**, **Summarize**, **Simplify**) to fire it instantly. A chat
+panel opens beside the text and the answer **streams in live** — your reading
+position never moves.
 
 The exact text you selected is shown at the top of the panel and (on live
 selections) highlighted on the page with a coral underline so you always know
 what the conversation is about.
+
+### 1a. One-click quick actions
+The floating toolbar isn't just "Ask" — the **Explain / Summarize / Simplify**
+chips send a tuned prompt about the selection the moment you click, so the common
+cases need zero typing. (Defined in `src/actions.ts` — easy to add your own.)
+
+### 1b. Live streaming answers
+Replies render token-by-token as they arrive from the API instead of appearing
+all at once after a pause, so long answers feel fast and you can start reading
+immediately.
 
 ### 2. Follow-up conversations
 Each panel is a full conversation, not a one-shot. Keep asking follow-ups and the
@@ -65,7 +76,7 @@ whole chat — not just the snippet.
   back to using just the highlighted text.
 
 ### 5. Three ways to trigger
-- **Floating button** near the selection.
+- **Floating toolbar** near the selection (Ask + quick-action chips).
 - **Right-click → "Ask Claude about '…'"** context-menu item.
 - **Keyboard shortcut:** `⌘/Ctrl + Shift + L` (rebindable at
   `chrome://extensions/shortcuts`).
