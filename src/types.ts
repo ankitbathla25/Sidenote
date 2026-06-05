@@ -4,6 +4,13 @@ export interface Message {
   content: string
 }
 
+// A reusable prompt the user can pick from the panel's "/" menu. Built-in ones
+// ship with the extension; users can add their own (saved in chrome.storage.sync).
+export interface LibraryPrompt {
+  label: string
+  prompt: string
+}
+
 // What we store in chrome.storage.sync
 export interface StorageData {
   claudeApiKey?: string
@@ -13,6 +20,8 @@ export interface StorageData {
   // cut the per-session token cost. Off-claude.ai pages have no conversation
   // to send, so this has no effect there.
   includePageContext?: boolean
+  // User-defined prompts surfaced in the panel's "/" menu, managed in the popup.
+  customPrompts?: LibraryPrompt[]
 }
 
 // An image to send to Claude's vision API. Either inline base64 (we fetched and

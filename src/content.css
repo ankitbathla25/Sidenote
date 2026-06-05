@@ -644,6 +644,7 @@ mark.cir-highlight {
 /* ─── Input area ──────────────────────────────────────────────────────────────  */
 
 .cir-input-area {
+  position: relative; /* anchors the "/" prompt menu */
   display: flex;
   align-items: flex-end;
   gap: 8px;
@@ -651,6 +652,57 @@ mark.cir-highlight {
   border-top: 1px solid var(--cir-border);
   flex-shrink: 0;
   background: var(--cir-bg);
+}
+
+/* ─── "/" prompt menu ─────────────────────────────────────────────────────────
+   Pops up above the input when the user types "/" — a list of saved prompts.   */
+
+.cir-prompt-menu {
+  display: none;
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: calc(100% - 4px);
+  max-height: 230px;
+  overflow-y: auto;
+  background: var(--cir-surface);
+  border: 1px solid var(--cir-border);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px var(--cir-shadow);
+  padding: 4px;
+  z-index: 3;
+}
+
+.cir-prompt-menu--visible {
+  display: block;
+}
+
+.cir-prompt-item {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 6px 9px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.cir-prompt-item--active,
+.cir-prompt-item:hover {
+  background: var(--cir-card);
+}
+
+.cir-prompt-item-label {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--cir-text);
+}
+
+.cir-prompt-item-preview {
+  font-size: 11px;
+  color: var(--cir-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .cir-textarea {

@@ -221,6 +221,119 @@
         color: var(--text);
       }
 
+      /* ── Custom prompts ── */
+
+      .prompt-list {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        margin: 8px 0;
+      }
+
+      .prompt-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 7px 10px;
+      }
+
+      .prompt-row-label {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text);
+        flex-shrink: 0;
+      }
+
+      .prompt-row-text {
+        font-size: 11px;
+        color: var(--text-muted);
+        flex: 1;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .prompt-row-remove {
+        flex-shrink: 0;
+        background: none;
+        border: none;
+        color: var(--faint);
+        cursor: pointer;
+        font-size: 15px;
+        line-height: 1;
+        padding: 2px 4px;
+        border-radius: 5px;
+      }
+
+      .prompt-row-remove:hover {
+        color: var(--error);
+        background: var(--error-soft);
+      }
+
+      .prompt-empty {
+        font-size: 11px;
+        color: var(--faint);
+        font-style: italic;
+        padding: 2px 0;
+      }
+
+      .prompt-add {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .prompt-add textarea {
+        width: 100%;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        color: var(--text);
+        font-size: 12px;
+        padding: 8px 10px;
+        outline: none;
+        resize: vertical;
+        font-family: inherit;
+      }
+
+      .prompt-add input[type="text"] {
+        width: 100%;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        color: var(--text);
+        font-size: 12px;
+        padding: 8px 10px;
+        outline: none;
+      }
+
+      .prompt-add textarea:focus,
+      .prompt-add input[type="text"]:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px var(--accent-soft);
+      }
+
+      .btn-add-prompt {
+        align-self: flex-start;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        color: var(--text);
+        font-size: 12px;
+        font-weight: 600;
+        padding: 7px 14px;
+        cursor: pointer;
+        transition: border-color 0.12s, color 0.12s;
+      }
+
+      .btn-add-prompt:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+
       /* ── Save button ── */
 
       .btn-save {
@@ -363,6 +476,20 @@
       <div class="hint">
         On claude.ai, includes the whole visible thread so answers stay grounded.
         Turn off to send only the highlighted text and use fewer tokens.
+      </div>
+    </div>
+
+    <!-- Custom prompts -->
+    <div class="field">
+      <label>Custom prompts</label>
+      <div class="hint">
+        Saved prompts you can pick from the <strong>/</strong> menu in any panel.
+      </div>
+      <div class="prompt-list" id="promptList"></div>
+      <div class="prompt-add">
+        <input type="text" id="promptLabel" placeholder="Label (e.g. Tweet it)" maxlength="40" />
+        <textarea id="promptText" placeholder="Prompt text…" rows="2"></textarea>
+        <button class="btn-add-prompt" id="addPromptBtn" type="button">Add prompt</button>
       </div>
     </div>
 

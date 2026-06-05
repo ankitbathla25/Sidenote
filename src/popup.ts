@@ -1,5 +1,5 @@
 import { AVAILABLE_MODELS, DEFAULT_MODEL } from './api'
-import type { StorageData } from './types'
+import type { StorageData, LibraryPrompt } from './types'
 
 // ─── Element references ───────────────────────────────────────────────────────
 // Grabbed once at the top — no need to query the DOM repeatedly
@@ -15,6 +15,21 @@ const modelDescription =
 
 const includePageContextInput =
   document.getElementById('includePageContext') as HTMLInputElement
+
+const promptList =
+  document.getElementById('promptList') as HTMLDivElement
+
+const promptLabelInput =
+  document.getElementById('promptLabel') as HTMLInputElement
+
+const promptTextInput =
+  document.getElementById('promptText') as HTMLTextAreaElement
+
+const addPromptBtn =
+  document.getElementById('addPromptBtn') as HTMLButtonElement
+
+// In-memory copy of the user's custom prompts, persisted to chrome.storage.sync
+let customPrompts: LibraryPrompt[] = []
 
 const saveBtn =
   document.getElementById('saveBtn') as HTMLButtonElement
@@ -62,8 +77,77 @@ const loadSavedSettings = (): void => {
 
       // Context scope — unset means "on", so only an explicit false unchecks it
       includePageContextInput.checked = result.includePageContext !== false
+
+      // Custom prompts
+      customPrompts = result.customPrompts ?? []
+      renderPromptList()
     }
   )
+}
+
+// ─── Custom prompts ─────────────────────────────────────────────────────────────
+
+// Persist the current list immediately so open pages pick it up live
+const persistCustomPrompts = (): void => {
+  chrome.storage.sync.set({ customPrompts })
+}
+
+const renderPromptList = (): void => {
+  promptList.innerHTML = ''
+
+  if (customPrompts.length === 0) {
+    const empty = document.createElement('div')
+    empty.className = 'prompt-empty'
+    empty.textContent = 'No custom prompts yet.'
+    promptList.appendChild(empty)
+    return
+  }
+
+  customPrompts.forEach((p, i) => {
+    const row = document.createElement('div')
+    row.className = 'prompt-row'
+
+    const label = document.createElement('span')
+    label.className = 'prompt-row-label'
+    label.textContent = p.label
+
+    const text = document.createElement('span')
+    text.className = 'prompt-row-text'
+    text.textContent = p.prompt
+
+    const remove = document.createElement('button')
+    remove.className = 'prompt-row-remove'
+    remove.type = 'button'
+    remove.textContent = '✕'
+    remove.setAttribute('aria-label', `Remove ${p.label}`)
+    remove.addEventListener('click', () => {
+      customPrompts.splice(i, 1)
+      persistCustomPrompts()
+      renderPromptList()
+    })
+
+    // textContent (not innerHTML) so a prompt can never inject markup
+    row.append(label, text, remove)
+    promptList.appendChild(row)
+  })
+}
+
+const addPrompt = (): void => {
+  const label = promptLabelInput.value.trim()
+  const prompt = promptTextInput.value.trim()
+  if (!label || !prompt) {
+    showStatus('Give the prompt a label and text', 'error')
+    return
+  }
+
+  customPrompts.push({ label, prompt })
+  persistCustomPrompts()
+  renderPromptList()
+
+  promptLabelInput.value = ''
+  promptTextInput.value = ''
+  promptLabelInput.focus()
+  showStatus('Prompt added ✓', 'success')
 }
 
 // ─── Validation ───────────────────────────────────────────────────────────────
@@ -110,6 +194,7 @@ const saveSettings = (): void => {
     claudeApiKey: apiKey,
     claudeModel: model,
     includePageContext: includePageContextInput.checked,
+    customPrompts,
   }
 
   chrome.storage.sync.set(data, () => {
@@ -126,6 +211,9 @@ modelSelect.addEventListener('change', () => {
 
 // Save on button click
 saveBtn.addEventListener('click', saveSettings)
+
+// Add a custom prompt
+addPromptBtn.addEventListener('click', addPrompt)
 
 // Save on Enter key inside the API key field
 apiKeyInput.addEventListener('keydown', (e: KeyboardEvent) => {

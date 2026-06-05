@@ -7,6 +7,7 @@ import type {
   SavedSession,
   Usage,
   ImageSource,
+  LibraryPrompt,
 } from './types'
 
 // ─── DOM Builders ────────────────────────────────────────────────────────────
@@ -561,6 +562,11 @@ export interface CreatePanelOptions {
   // src to show as a thumbnail in the panel.
   image?: ImageSource
   imagePreviewUrl?: string
+  // Prompts offered in the "/" menu inside the input (built-in + user custom).
+  promptLibrary?: LibraryPrompt[]
+  // Label above the context preview (default "Selected text"; "Page" for a
+  // whole-page summary).
+  contextLabel?: string
   // How many panels are already open — cascades a new one so they don't stack
   cascadeIndex?: number
   // Called whenever the session's persistable state changes (messages, move,
@@ -584,6 +590,8 @@ export const createPanel = (options: CreatePanelOptions): Panel => {
     initialPrompt = '',
     image,
     imagePreviewUrl,
+    promptLibrary = [],
+    contextLabel = 'Selected text',
     cascadeIndex = 0,
     onChange,
     onDestroy,
@@ -602,12 +610,16 @@ export const createPanel = (options: CreatePanelOptions): Panel => {
   // Pull out the sub-elements we need to interact with
   const messagesEl = panel.querySelector('.cir-messages') as HTMLDivElement
   const textarea = panel.querySelector('.cir-textarea') as HTMLTextAreaElement
+  const inputArea = panel.querySelector('.cir-input-area') as HTMLElement
   const sendBtn = panel.querySelector('.cir-send-btn') as HTMLButtonElement
   const closeBtn = panel.querySelector('.cir-close-btn') as HTMLButtonElement
   const header = panel.querySelector('.cir-panel-header') as HTMLElement
   const resizeHandles = Array.from(
     panel.querySelectorAll('.cir-resize-handle')
   ) as HTMLElement[]
+
+  // Label the context preview ("Selected text" by default, "Page" for summaries)
+  ;(panel.querySelector('.cir-context-label') as HTMLElement).textContent = contextLabel
 
   // Image sessions: swap the "Selected text" preview for a thumbnail and adapt
   // the input placeholder. The original src renders fine in an <img> regardless
@@ -727,7 +739,106 @@ export const createPanel = (options: CreatePanelOptions): Panel => {
 
   sendBtn.addEventListener('click', send)
 
+  // ── "/" prompt menu ─────────────────────────────────────────────────────────
+  // Typing "/" at the start of the input opens a filterable list of library
+  // prompts (built-in + the user's custom ones). Pick one to auto-send it.
+
+  const promptMenu = document.createElement('div')
+  promptMenu.className = 'cir-prompt-menu'
+  inputArea.appendChild(promptMenu)
+
+  let menuOpen = false
+  let menuItems: LibraryPrompt[] = []
+  let menuIndex = 0
+
+  const closePromptMenu = (): void => {
+    if (!menuOpen) return
+    menuOpen = false
+    promptMenu.classList.remove('cir-prompt-menu--visible')
+    promptMenu.innerHTML = ''
+  }
+
+  const renderPromptMenu = (): void => {
+    promptMenu.innerHTML = ''
+    menuItems.forEach((p, i) => {
+      const item = document.createElement('div')
+      item.className =
+        'cir-prompt-item' + (i === menuIndex ? ' cir-prompt-item--active' : '')
+      item.setAttribute('role', 'button')
+
+      const label = document.createElement('span')
+      label.className = 'cir-prompt-item-label'
+      label.textContent = p.label
+      const preview = document.createElement('span')
+      preview.className = 'cir-prompt-item-preview'
+      preview.textContent = p.prompt
+      item.append(label, preview)
+
+      // mousedown (not click) so it runs before the textarea loses focus
+      item.addEventListener('mousedown', (e) => {
+        e.preventDefault()
+        menuIndex = i
+        choosePrompt()
+      })
+      promptMenu.appendChild(item)
+    })
+  }
+
+  // Open/refresh the menu from the current input: visible only when the text
+  // starts with "/", filtered by whatever follows it.
+  const updatePromptMenu = (): void => {
+    const value = textarea.value
+    if (promptLibrary.length === 0 || !value.startsWith('/')) {
+      closePromptMenu()
+      return
+    }
+    const query = value.slice(1).trim().toLowerCase()
+    menuItems = promptLibrary.filter(
+      (p) =>
+        !query ||
+        p.label.toLowerCase().includes(query) ||
+        p.prompt.toLowerCase().includes(query)
+    )
+    if (menuItems.length === 0) {
+      closePromptMenu()
+      return
+    }
+    menuIndex = 0
+    menuOpen = true
+    promptMenu.classList.add('cir-prompt-menu--visible')
+    renderPromptMenu()
+  }
+
+  const moveMenuHighlight = (delta: number): void => {
+    if (!menuOpen) return
+    menuIndex = (menuIndex + delta + menuItems.length) % menuItems.length
+    renderPromptMenu()
+  }
+
+  // Replace the "/..." text with the chosen prompt and send it
+  function choosePrompt(): void {
+    const chosen = menuItems[menuIndex]
+    closePromptMenu()
+    if (!chosen) return
+    textarea.value = chosen.prompt
+    autoGrowTextarea(textarea)
+    void send()
+  }
+
   textarea.addEventListener('keydown', (e: KeyboardEvent) => {
+    // When the prompt menu is open it owns the navigation keys
+    if (menuOpen) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); moveMenuHighlight(1); return }
+      if (e.key === 'ArrowUp') { e.preventDefault(); moveMenuHighlight(-1); return }
+      if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); choosePrompt(); return }
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        e.stopPropagation() // don't let the document handler close the panel
+        closePromptMenu()
+        return
+      }
+    }
+
     // Enter sends, Shift+Enter adds a new line
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
@@ -735,7 +846,14 @@ export const createPanel = (options: CreatePanelOptions): Panel => {
     }
   })
 
-  textarea.addEventListener('input', () => autoGrowTextarea(textarea))
+  textarea.addEventListener('input', () => {
+    autoGrowTextarea(textarea)
+    updatePromptMenu()
+  })
+
+  // Close the menu shortly after focus leaves the input (delay lets an item's
+  // mousedown selection run first)
+  textarea.addEventListener('blur', () => setTimeout(closePromptMenu, 120))
 
   // Restored-but-minimized sessions start collapsed; otherwise focus the input
   if (startMinimized) {

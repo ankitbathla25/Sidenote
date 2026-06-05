@@ -1,8 +1,8 @@
 import './content.css'
 import { createFloatingButton, calculateButtonPosition } from './floatingButton'
-import { promptForAction } from './actions'
+import { promptForAction, SUMMARIZE_PAGE_PROMPT, BUILTIN_PROMPTS } from './actions'
 import { createPanel, type Panel } from './panel'
-import type { SelectionContext, StorageData, ApiConfig, Message, SavedSession, ImageSource } from './types'
+import type { SelectionContext, StorageData, ApiConfig, Message, SavedSession, ImageSource, LibraryPrompt } from './types'
 import { DEFAULT_MODEL } from './api'
 import { loadSessions, saveSessions } from './storage'
 
@@ -17,23 +17,30 @@ interface ExtensionConfig {
   // Send the whole on-page conversation as context, or just the selection.
   // Defaults to true; the user can turn it off in the popup to save tokens.
   includePageContext: boolean
+  // User-defined prompts for the panel's "/" menu (managed in the popup)
+  customPrompts: LibraryPrompt[]
 }
 
 const config: ExtensionConfig = {
   apiKey: null,
   model: DEFAULT_MODEL,
   includePageContext: true,
+  customPrompts: [],
 }
+
+// The full "/" menu library: built-in prompts plus the user's custom ones
+const promptLibrary = (): LibraryPrompt[] => [...BUILTIN_PROMPTS, ...config.customPrompts]
 
 // Load saved values when the content script first runs, then restore any
 // sessions that were open on this page before a reload
 chrome.storage.sync.get(
-  ['claudeApiKey', 'claudeModel', 'includePageContext'],
+  ['claudeApiKey', 'claudeModel', 'includePageContext', 'customPrompts'],
   (result: StorageData) => {
     config.apiKey = result.claudeApiKey ?? null
     config.model = result.claudeModel ?? DEFAULT_MODEL
     // Unset means "on" — only an explicit false disables it
     config.includePageContext = result.includePageContext !== false
+    config.customPrompts = result.customPrompts ?? []
     // Restore after config is set so restored panels capture a valid API key
     restoreSessions()
   }
@@ -57,6 +64,10 @@ chrome.storage.onChanged.addListener(
     if (changes['includePageContext']) {
       config.includePageContext =
         changes['includePageContext'].newValue !== false
+    }
+    if (changes['customPrompts']) {
+      config.customPrompts =
+        (changes['customPrompts'].newValue as LibraryPrompt[]) ?? []
     }
   }
 )
@@ -273,7 +284,8 @@ const newId = (): string =>
 // quick-action chip) is auto-sent on open; omit it for a free-form ask.
 const openPanelFromContext = (
   context: SelectionContext,
-  initialPrompt = ''
+  initialPrompt = '',
+  contextLabel = 'Selected text'
 ): void => {
   // Capture the whole on-page conversation so Claude answers with the same
   // context the user is looking at (empty on non-claude.ai pages). When the
@@ -293,6 +305,8 @@ const openPanelFromContext = (
     seed,
     range: context.range,
     initialPrompt,
+    contextLabel,
+    promptLibrary: promptLibrary(),
     cascadeIndex: state.panels.length,
     onChange: schedulePersist,
     onDestroy: removePanel,
@@ -352,6 +366,7 @@ const openImagePanel = async (srcUrl: string): Promise<void> => {
     range: null,
     image,
     imagePreviewUrl: srcUrl,
+    promptLibrary: promptLibrary(),
     cascadeIndex: state.panels.length,
     onChange: schedulePersist,
     onDestroy: removePanel,
@@ -359,6 +374,27 @@ const openImagePanel = async (srcUrl: string): Promise<void> => {
 
   state.panels.push(panel)
   schedulePersist()
+}
+
+// ─── Page summary ───────────────────────────────────────────────────────────────
+// Scrapes the visible page text and opens a session that auto-summarizes it.
+// innerText is the rendered, human-readable text; capped so a huge page doesn't
+// blow up token usage.
+const PAGE_TEXT_LIMIT = 16000
+
+const scrapePageText = (): string =>
+  (document.body?.innerText ?? '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+    .slice(0, PAGE_TEXT_LIMIT)
+
+const openPageSummary = (): void => {
+  const text = scrapePageText()
+  if (!text) {
+    showToast('<span>Nothing to summarize</span><strong>No readable text on this page.</strong>')
+    return
+  }
+  openPanelFromContext({ text, range: null }, SUMMARIZE_PAGE_PROMPT, 'Page')
 }
 
 // Re-creates a session saved before a page reload
@@ -374,6 +410,7 @@ const restoreSession = (saved: SavedSession): void => {
     startMinimized: saved.minimized,
     image: saved.image,
     imagePreviewUrl: saved.imagePreviewUrl,
+    promptLibrary: promptLibrary(),
     onChange: schedulePersist,
     onDestroy: removePanel,
   })
@@ -409,9 +446,8 @@ function onActionClick(actionId: string): void {
 
 chrome.runtime.onMessage.addListener(
   (message: { type?: string; srcUrl?: string }) => {
-    if (message?.type !== 'cir-ask-selection' && message?.type !== 'cir-ask-image') {
-      return
-    }
+    const known = ['cir-ask-selection', 'cir-ask-image', 'cir-summarize-page']
+    if (!message?.type || !known.includes(message.type)) return
 
     if (!config.apiKey) {
       showNoApiKeyMessage()
@@ -420,6 +456,11 @@ chrome.runtime.onMessage.addListener(
 
     if (message.type === 'cir-ask-image' && message.srcUrl) {
       void openImagePanel(message.srcUrl)
+      return
+    }
+
+    if (message.type === 'cir-summarize-page') {
+      openPageSummary()
       return
     }
 

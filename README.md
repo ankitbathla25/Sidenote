@@ -85,10 +85,22 @@ base64-encoded right in the page (so even private, logged-in-page images work);
 if it can't be read locally, the public URL is handed to the API to fetch
 server-side. A thumbnail of the image sits at the top of the panel.
 
+### 4b. Summarize the whole page
+**Right-click → "Summarize this page with Claude"** scrapes the visible page text
+and opens a panel that auto-summarizes it (overview + key-point bullets) — no
+selection needed.
+
+### 4c. Prompt library (`/` menu) + custom prompts
+Type **`/`** in any panel's input to open a filterable list of saved prompts —
+built-ins like *Explain, Summarize, Translate, Improve writing, Fix grammar,
+Key takeaways* — and pick one (arrow keys / Enter / click) to send it instantly.
+Add your **own** prompts in the popup (a label + the prompt text); they show up in
+the `/` menu on every page.
+
 ### 5. Several ways to trigger
 - **Floating toolbar** near a text selection (Ask + quick-action chips).
-- **Right-click → "Ask Claude about '…'"** on selected text, or **"Ask Claude
-  about this image"** on any image.
+- **Right-click** → *"Ask Claude about '…'"* on selected text, *"Ask Claude about
+  this image"* on any image, or *"Summarize this page with Claude"* anywhere.
 - **Keyboard shortcut:** `⌘/Ctrl + Shift + L` (rebindable at
   `chrome://extensions/shortcuts`).
 

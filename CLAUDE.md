@@ -17,6 +17,11 @@ on-screen conversation in as context.
   image"* opens a panel with the picture attached and asks Claude's vision model
   about it. Images are fetched + base64-encoded in the page (covers private/
   same-origin images), falling back to a URL the API fetches server-side.
+- **Summarize the whole page.** Right-click → *"Summarize this page with Claude"*
+  scrapes the visible page text (capped) and auto-summarizes it.
+- **Prompt library (`/` menu).** Typing `/` in a panel's input opens a filterable
+  list of prompts — built-in ones (`BUILTIN_PROMPTS`) plus the user's own custom
+  prompts (managed in the popup); pick one to auto-send it.
 - **Follow-up conversations.** Each panel is a real conversation — keep asking
   follow-ups and the panel remembers the thread.
 - **Multiple sessions at once.** Every selection opens its own independent
@@ -152,11 +157,11 @@ updates afterward:
 | `src/content.ts` | Injected into every page. Selection detection, the session list, opening/restoring panels, persistence, and the background-trigger listener. |
 | `src/panel.ts` | A single inline session: DOM, drag, 4-corner resize, minimize→dock, send handler, and `serialize()` for persistence. Exports `createPanel()` and the `Panel` interface. |
 | `src/floatingButton.ts` | The floating toolbar of quick-action chips shown near a selection; reports the clicked action via an `onAction(id)` callback. |
-| `src/actions.ts` | The quick-action definitions (`QUICK_ACTIONS`: id, label, preset prompt) shared by the toolbar and `content.ts`. |
+| `src/actions.ts` | Quick-action chip definitions (`QUICK_ACTIONS`), the `/`-menu prompt library (`BUILTIN_PROMPTS`), and `SUMMARIZE_PAGE_PROMPT`. Shared by the toolbar, panel, and `content.ts`. |
 | `src/api.ts` | Anthropic API client. Streaming `sendMessage()` (SSE → `onText` chunks + usage), model list, `normalizeMessages()`, `withConversationCache()`. |
 | `src/markdown.ts` | Minimal Markdown→HTML renderer (with HTML escaping). |
 | `src/storage.ts` | Load/save sessions in `chrome.storage.local`, keyed by `origin + pathname`. |
-| `src/background.ts` | Service worker: context-menu items (selection → `cir-ask-selection`, image → `cir-ask-image` with the `srcUrl`) and keyboard command → message the active tab. |
+| `src/background.ts` | Service worker: context-menu items (selection → `cir-ask-selection`, image → `cir-ask-image` with the `srcUrl`, page → `cir-summarize-page`) and keyboard command → message the active tab. |
 | `src/popup.html` / `src/popup.ts` | Toolbar popup: enter API key, choose model. Writes to `chrome.storage.sync`. |
 | `src/types.ts` | Shared types: `Message`, `SelectionContext`, `ApiConfig`, `PanelGeometry`, `SavedSession`, etc. |
 | `src/content.css` | All injected UI styles. Theme tokens (`--cir-*`) with a `prefers-color-scheme: dark` block. |
@@ -203,9 +208,10 @@ updates afterward:
 
 ### Settings (popup)
 - **API key** (`sk-ant-…`, validated for the right prefix), **model**
-  (Opus / Sonnet / Haiku), and a **"Send full page conversation as context"**
-  toggle (`includePageContext`, default on). All stored in `chrome.storage.sync`
-  and picked up live by open pages.
+  (Opus / Sonnet / Haiku), a **"Send full page conversation as context"**
+  toggle (`includePageContext`, default on), and **custom prompts**
+  (`customPrompts`, surfaced in the panel's `/` menu). All stored in
+  `chrome.storage.sync` and picked up live by open pages.
 
 ---
 

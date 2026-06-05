@@ -7,6 +7,7 @@
 
 const MENU_ID = 'cir-ask-selection'
 const IMAGE_MENU_ID = 'cir-ask-image'
+const PAGE_MENU_ID = 'cir-summarize-page'
 
 // Ask the content script in a tab to open a session from the current selection
 const triggerAsk = (tabId: number): void => {
@@ -18,6 +19,13 @@ const triggerAsk = (tabId: number): void => {
 // Ask the content script to open a session about a right-clicked image
 const triggerAskImage = (tabId: number, srcUrl: string): void => {
   chrome.tabs.sendMessage(tabId, { type: 'cir-ask-image', srcUrl }).catch(() => {
+    // No content script on this tab — ignore
+  })
+}
+
+// Ask the content script to open a session summarizing the whole page
+const triggerSummarizePage = (tabId: number): void => {
+  chrome.tabs.sendMessage(tabId, { type: 'cir-summarize-page' }).catch(() => {
     // No content script on this tab — ignore
   })
 }
@@ -38,6 +46,11 @@ chrome.runtime.onInstalled.addListener(() => {
       title: 'Ask Claude about this image',
       contexts: ['image'],
     })
+    chrome.contextMenus.create({
+      id: PAGE_MENU_ID,
+      title: 'Summarize this page with Claude',
+      contexts: ['page'],
+    })
   })
 })
 
@@ -47,6 +60,8 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
     triggerAsk(tab.id)
   } else if (info.menuItemId === IMAGE_MENU_ID && info.srcUrl) {
     triggerAskImage(tab.id, info.srcUrl)
+  } else if (info.menuItemId === PAGE_MENU_ID) {
+    triggerSummarizePage(tab.id)
   }
 })
 
